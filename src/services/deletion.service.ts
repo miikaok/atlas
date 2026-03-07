@@ -17,20 +17,21 @@ export class DeletionService {
   ) {}
 
   /**
-   * Deletes all data objects and manifests for a single mailbox.
-   * Keys: data/{mailbox_id}/*, manifests/{mailbox_id}/*
+   * Deletes all data objects, attachment objects, and manifests for a single mailbox.
+   * Keys: data/{mailbox_id}/*, attachments/{mailbox_id}/*, manifests/{mailbox_id}/*
    */
   async delete_mailbox_data(tenant_id: string, mailbox_id: string): Promise<DeletionResult> {
     mailbox_id = mailbox_id.toLowerCase();
     const ctx = await this._tenant_factory.create(tenant_id);
 
     const data_keys = await ctx.storage.list(`data/${mailbox_id}/`);
+    const attachment_keys = await ctx.storage.list(`attachments/${mailbox_id}/`);
     const manifest_keys = await ctx.storage.list(`manifests/${mailbox_id}/`);
 
-    await delete_keys(ctx.storage, [...data_keys, ...manifest_keys]);
+    await delete_keys(ctx.storage, [...data_keys, ...attachment_keys, ...manifest_keys]);
 
     return {
-      deleted_objects: data_keys.length,
+      deleted_objects: data_keys.length + attachment_keys.length,
       deleted_manifests: manifest_keys.length,
     };
   }
@@ -54,21 +55,22 @@ export class DeletionService {
   }
 
   /**
-   * Removes everything in the tenant bucket: data, manifests, and _meta
+   * Removes everything in the tenant bucket: data, attachments, manifests, and _meta
    * (including the encrypted DEK). This is irreversible.
    */
   async purge_tenant(tenant_id: string): Promise<DeletionResult> {
     const ctx = await this._tenant_factory.create(tenant_id);
 
     const data_keys = await ctx.storage.list('data/');
+    const attachment_keys = await ctx.storage.list('attachments/');
     const manifest_keys = await ctx.storage.list('manifests/');
     const meta_keys = await ctx.storage.list('_meta/');
 
-    const all_keys = [...data_keys, ...manifest_keys, ...meta_keys];
+    const all_keys = [...data_keys, ...attachment_keys, ...manifest_keys, ...meta_keys];
     await delete_keys(ctx.storage, all_keys);
 
     return {
-      deleted_objects: data_keys.length + meta_keys.length,
+      deleted_objects: data_keys.length + attachment_keys.length + meta_keys.length,
       deleted_manifests: manifest_keys.length,
     };
   }

@@ -58,10 +58,7 @@ function resolve_tenant_id(container: Container, options: ListOptions): string {
 // ---------------------------------------------------------------------------
 
 /** Prints a table of all backed-up mailboxes with summary stats. */
-async function print_all_mailboxes(
-  catalog: CatalogService,
-  tenant_id: string,
-): Promise<void> {
+async function print_all_mailboxes(catalog: CatalogService, tenant_id: string): Promise<void> {
   const mailboxes = await catalog.list_mailboxes(tenant_id);
 
   if (mailboxes.length === 0) {
@@ -120,12 +117,7 @@ async function print_mailbox_snapshots(
 
 /** Renders the snapshot table. */
 function print_snapshot_table(snapshots: Manifest[]): void {
-  const header =
-    '  ' +
-    pad('Snapshot', 40) +
-    pad('Objects', 10) +
-    pad('Size', 12) +
-    'Created';
+  const header = '  ' + pad('Snapshot', 40) + pad('Objects', 10) + pad('Size', 12) + 'Created';
   console.log(header);
   console.log('  ' + '-'.repeat(header.length - 2));
 
@@ -167,23 +159,20 @@ async function print_snapshot_messages(
   logger.info(`Mailbox: ${manifest.mailbox_id}`);
   logger.info(`${total} message(s), ${format_bytes(manifest.total_size_bytes)}\n`);
 
-  const header =
-    '  ' +
-    pad('#', 6) +
-    pad('Message ID', 24) +
-    pad('Size', 10) +
-    'Storage Key';
+  const header = '  ' + pad('#', 6) + pad('Message ID', 24) + pad('Size', 10) + 'Storage Key';
   console.log(header);
   console.log('  ' + '-'.repeat(header.length - 2));
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i]!;
+    const att_size = e.attachments?.reduce((sum, a) => sum + a.size_bytes, 0) ?? 0;
+    const total_entry_size = e.size_bytes + att_size;
     const short_id = e.object_id.length > 20 ? e.object_id.slice(0, 20) + '...' : e.object_id;
     console.log(
       '  ' +
         pad(String(i + 1), 6) +
         pad(short_id, 24) +
-        pad(format_bytes(e.size_bytes), 10) +
+        pad(format_bytes(total_entry_size), 10) +
         e.storage_key,
     );
   }

@@ -11,9 +11,20 @@ export interface Manifest {
   readonly entries: ManifestEntry[];
 }
 
+export interface AttachmentEntry {
+  readonly attachment_id: string;
+  readonly name: string;
+  readonly content_type: string;
+  readonly size_bytes: number;
+  readonly storage_key: string;
+  readonly checksum: string;
+  readonly is_inline: boolean;
+}
+
 export interface ManifestEntry {
   readonly object_id: string;
   readonly storage_key: string;
   readonly checksum: string;
   readonly size_bytes: number;
+  readonly attachments?: AttachmentEntry[];
 }

@@ -206,7 +206,7 @@ describe('CatalogService', () => {
   // ---------------------------------------------------------------------------
 
   describe('read_message', () => {
-    it('decrypts and parses a stored message', async () => {
+    it('decrypts and parses a stored message with empty attachments', async () => {
       const message_json = { subject: 'Hello', body: { content: 'World' } };
       const plaintext = Buffer.from(JSON.stringify(message_json));
       const ciphertext = Buffer.concat([Buffer.from('E'), plaintext]);
@@ -222,9 +222,46 @@ describe('CatalogService', () => {
 
       const result = await service.read_message('t', 'snap-1', 'msg-1');
 
-      expect(result).toEqual(message_json);
+      expect(result?.message).toEqual(message_json);
+      expect(result?.attachments).toEqual([]);
       expect(mock_context.storage.get).toHaveBeenCalledWith('data/u/abc');
       expect(mock_context.decrypt).toHaveBeenCalledWith(ciphertext);
+    });
+
+    it('returns attachment metadata from manifest entry', async () => {
+      const message_json = { subject: 'With PDF' };
+      const plaintext = Buffer.from(JSON.stringify(message_json));
+      const ciphertext = Buffer.concat([Buffer.from('E'), plaintext]);
+
+      const attachment_entry = {
+        attachment_id: 'att-1',
+        name: 'report.pdf',
+        content_type: 'application/pdf',
+        size_bytes: 2048,
+        storage_key: 'attachments/u/sha',
+        checksum: 'sha',
+        is_inline: false,
+      };
+
+      vi.mocked(mock_manifests.find_by_snapshot).mockResolvedValue(
+        make_manifest({
+          entries: [
+            {
+              object_id: 'msg-1',
+              storage_key: 'data/u/abc',
+              checksum: 'abc',
+              size_bytes: 100,
+              attachments: [attachment_entry],
+            },
+          ],
+        }),
+      );
+      vi.mocked(mock_context.storage.get as ReturnType<typeof vi.fn>).mockResolvedValue(ciphertext);
+
+      const result = await service.read_message('t', 'snap-1', 'msg-1');
+
+      expect(result?.attachments).toHaveLength(1);
+      expect(result?.attachments[0]?.name).toBe('report.pdf');
     });
 
     it('returns undefined when snapshot does not exist', async () => {
@@ -233,9 +270,7 @@ describe('CatalogService', () => {
     });
 
     it('returns undefined when message is not in manifest', async () => {
-      vi.mocked(mock_manifests.find_by_snapshot).mockResolvedValue(
-        make_manifest({ entries: [] }),
-      );
+      vi.mocked(mock_manifests.find_by_snapshot).mockResolvedValue(make_manifest({ entries: [] }));
 
       const result = await service.read_message('t', 'snap-1', 'no-such-msg');
       expect(result).toBeUndefined();

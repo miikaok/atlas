@@ -4,8 +4,13 @@
   "description": "An open-source CLI backup engine for Microsoft 365 mailboxes, designed with per-tenant encryption, content-addressed storage, and efficient delta synchronization for scalable, secure backups.",
   "type": "module",
   "bin": {
-    "atlas": "dist/cli.mjs"
+    "atlas": "./dist/cli.mjs"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsdown src/index.ts src/cli.ts",
     "test": "vitest run",
@@ -14,7 +19,8 @@
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\""
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "m365",
@@ -26,6 +32,17 @@
   ],
   "author": "Miika Oja-Kaukola",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/miikaok/atlas.git"
+  },
+  "homepage": "https://github.com/miikaok/atlas#readme",
+  "bugs": {
+    "url": "https://github.com/miikaok/atlas/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@types/node": "^25.3.5",
     "@vitest/coverage-v8": "^4.0.18",

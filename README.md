@@ -5,7 +5,8 @@ An open-source CLI backup engine for Microsoft 365 mailboxes, designed with per-
 ## Highlights
 
 - **Per-tenant envelope encryption** -- each tenant gets its own AES-256-GCM data encryption key (DEK), derived and wrapped via scrypt. A database breach exposes only encrypted blobs; each tenant's data requires its own master passphrase to decrypt. Most backup tools encrypt at the volume level or not at all.
-- **Content-addressed deduplication** -- messages are stored under `SHA-256(plaintext)` keys, scoped per-mailbox. Identical content across folders or backup runs within a mailbox is stored once. Dedup happens before encryption, so ciphertext variance doesn't defeat it.
+- **Content-addressed deduplication** -- messages and attachments are stored under `SHA-256(plaintext)` keys, scoped per-mailbox. Identical content across folders or backup runs within a mailbox is stored once. The same PDF attached to 50 emails is stored once. Dedup happens before encryption, so ciphertext variance doesn't defeat it.
+- **Attachment backup** -- file attachments are fetched via the Graph API, deduplicated independently of their parent message, and stored encrypted alongside message data. Attachments larger than ~4 MB that Graph cannot inline are recorded as metadata-only (name, MIME type, size) with a warning.
 - **Multi-layer integrity** -- plaintext SHA-256 checksums in the manifest, `Content-MD5` on every S3 PUT for transport verification, and AES-GCM authentication tags for at-rest tamper detection. `atlas verify` re-derives all three.
 - **Delta sync with stale-delta safeguard** -- uses Microsoft Graph delta queries for incremental backups. Detects interrupted prior runs (saved delta link + zero manifest entries) and automatically falls back to full enumeration. `--full` flag available to force it.
 - **Hexagonal architecture** -- ports-and-adapters with Inversify DI. Swap the storage backend or mail connector without touching business logic. Every service is independently testable.
@@ -131,7 +132,7 @@ atlas list -s <snapshot-id> --all   # all messages
 
 ### `atlas read`
 
-Decrypt and display a single backed-up message.
+Decrypt and display a single backed-up message. If the message has attachments, their metadata (name, MIME type, size) is listed below the body. Attachment content is not downloaded or displayed -- use the storage key from `--raw` output to retrieve the encrypted binary directly if needed.
 
 ```bash
 atlas read -s <snapshot-id> --message <message-id>        # formatted view
@@ -234,14 +235,18 @@ atlas-{tenant_id}/
 │       ├── {sha256_a}                  # encrypted message (content-addressed)
 │       ├── {sha256_b}
 │       └── ...
+├── attachments/
+│   └── {mailbox_id}/
+│       ├── {sha256_x}                  # encrypted attachment (content-addressed)
+│       └── ...
 └── manifests/
     └── {mailbox_id}/
         ├── {snapshot_id_1}.json        # encrypted manifest
         └── {snapshot_id_2}.json
 ```
 
-- **Content-addressed keys** -- `data/{mailbox}/{SHA-256 of plaintext}`. Deduplication is per-mailbox; identical messages across snapshots of the same mailbox are stored once.
-- **Manifests** -- JSON containing snapshot metadata, per-message checksums, sizes, storage keys, and delta links for the next incremental sync.
+- **Content-addressed keys** -- `data/{mailbox}/{SHA-256 of plaintext}` for messages, `attachments/{mailbox}/{SHA-256}` for file attachments. Deduplication is per-mailbox; identical content across snapshots of the same mailbox is stored once.
+- **Manifests** -- JSON containing snapshot metadata, per-message checksums, sizes, storage keys, attachment metadata, and delta links for the next incremental sync.
 
 ## Development
 

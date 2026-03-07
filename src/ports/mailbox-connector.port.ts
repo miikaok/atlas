@@ -12,6 +12,7 @@ export interface MailMessage {
   readonly received_at: Date;
   readonly size_bytes: number;
   readonly raw_body: Buffer;
+  readonly has_attachments: boolean;
 }
 
 export interface DeltaSyncResult {
@@ -26,6 +27,15 @@ export interface DeltaSyncResult {
 
 /** Called after each delta page to report enumeration progress. */
 export type DeltaPageCallback = (page_num: number, items_so_far: number) => void;
+
+export interface MessageAttachment {
+  readonly attachment_id: string;
+  readonly name: string;
+  readonly content_type: string;
+  readonly size_bytes: number;
+  readonly is_inline: boolean;
+  readonly content: Buffer;
+}
 
 export interface MailboxConnector {
   list_mailboxes(tenant_id: string): Promise<string[]>;
@@ -46,6 +56,13 @@ export interface MailboxConnector {
   ): Promise<DeltaSyncResult>;
 
   fetch_message(tenant_id: string, mailbox_id: string, message_id: string): Promise<MailMessage>;
+
+  /** Fetches file attachments for a message, decoding contentBytes from base64. */
+  fetch_attachments(
+    tenant_id: string,
+    mailbox_id: string,
+    message_id: string,
+  ): Promise<MessageAttachment[]>;
 }
 
 export const MAILBOX_CONNECTOR_TOKEN = Symbol.for('MailboxConnector');

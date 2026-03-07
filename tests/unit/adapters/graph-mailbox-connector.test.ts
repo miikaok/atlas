@@ -295,5 +295,28 @@ describe('GraphMailboxConnector', () => {
       expect(result.raw_body).toBeInstanceOf(Buffer);
       expect(result.size_bytes).toBeGreaterThan(0);
     });
+
+    it('populates has_attachments from Graph response', async () => {
+      mock_client._chain.get.mockResolvedValueOnce({
+        id: 'msg-att',
+        subject: 'With attachments',
+        receivedDateTime: '2025-04-01T08:00:00Z',
+        hasAttachments: true,
+      });
+
+      const result = await connector.fetch_message('tenant-1', 'user-1', 'msg-att');
+      expect(result.has_attachments).toBe(true);
+    });
+
+    it('defaults has_attachments to false when not set', async () => {
+      mock_client._chain.get.mockResolvedValueOnce({
+        id: 'msg-no-att',
+        subject: 'No attachments',
+        receivedDateTime: '2025-04-01T08:00:00Z',
+      });
+
+      const result = await connector.fetch_message('tenant-1', 'user-1', 'msg-no-att');
+      expect(result.has_attachments).toBe(false);
+    });
   });
 });

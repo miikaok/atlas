@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
 import { CatalogService } from '@/services/catalog.service';
+import type { AttachmentEntry } from '@/domain/manifest';
 import { logger } from '@/utils/logger';
 
 type ContainerFactory = () => Container;
@@ -33,28 +34,54 @@ async function execute_read(container: Container, options: ReadOptions): Promise
   logger.banner('Atlas Read');
 
   const catalog = container.get(CatalogService);
-  const message = await catalog.read_message(tenant_id, options.snapshot, options.message);
+  const result = await catalog.read_message(tenant_id, options.snapshot, options.message);
 
-  if (!message) {
-    logger.error(
-      `Message not found. Check the snapshot ID and message ID are correct.`,
-    );
+  if (!result) {
+    logger.error(`Message not found. Check the snapshot ID and message ID are correct.`);
     process.exitCode = 1;
     return;
   }
 
   if (options.raw) {
-    console.log(JSON.stringify(message, null, 2));
+    console.log(JSON.stringify(result.message, null, 2));
     return;
   }
 
-  print_formatted_message(message);
+  print_formatted_message(result.message);
+  print_attachment_list(result.attachments);
 }
 
 /** Resolves the tenant ID from CLI flag or config. */
 function resolve_tenant_id(container: Container, options: ReadOptions): string {
   if (options.tenant) return options.tenant;
   return container.get<AtlasConfig>(ATLAS_CONFIG_TOKEN).tenant_id;
+}
+
+/** Lists attachment metadata (name, MIME type, size) if any exist. */
+function print_attachment_list(attachments: AttachmentEntry[]): void {
+  if (attachments.length === 0) return;
+
+  console.log(chalk.gray('-'.repeat(60)));
+  console.log(chalk.bold(`Attachments (${attachments.length}):`));
+
+  for (let i = 0; i < attachments.length; i++) {
+    const a = attachments[i]!;
+    const inline_tag = a.is_inline ? chalk.gray('  (inline)') : '';
+    const skipped = !a.storage_key ? chalk.yellow('  [binary not stored]') : '';
+    console.log(
+      `  ${i + 1}. ${a.name}  ${chalk.gray(a.content_type)}  ${format_bytes(a.size_bytes)}` +
+        inline_tag +
+        skipped,
+    );
+  }
+}
+
+/** Formats bytes into human-readable size. */
+function format_bytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
 /** Prints key message fields in a human-readable format. */

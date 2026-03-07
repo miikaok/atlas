@@ -48,17 +48,13 @@ export class S3ObjectStorage implements ObjectStorage {
 
   /** Removes a single object. */
   async delete(key: string): Promise<void> {
-    await this._client.send(
-      new DeleteObjectCommand({ Bucket: this._bucket, Key: key }),
-    );
+    await this._client.send(new DeleteObjectCommand({ Bucket: this._bucket, Key: key }));
   }
 
   /** Returns true if the object exists (HEAD request). */
   async exists(key: string): Promise<boolean> {
     try {
-      await this._client.send(
-        new HeadObjectCommand({ Bucket: this._bucket, Key: key }),
-      );
+      await this._client.send(new HeadObjectCommand({ Bucket: this._bucket, Key: key }));
       return true;
     } catch (err) {
       const code = (err as { name?: string }).name;

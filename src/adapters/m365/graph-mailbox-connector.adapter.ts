@@ -5,13 +5,14 @@ import type {
   MailboxConnector,
   MailFolder,
   MailMessage,
+  MessageAttachment,
   DeltaSyncResult,
   DeltaPageCallback,
 } from '@/ports/mailbox-connector.port';
 import { logger } from '@/utils/logger';
+import { is_invalid_delta_error, rethrow_if_access_denied } from './graph-error-helpers';
 
 const EXCLUDED_FOLDERS = new Set(['drafts', 'outbox', 'recoverableitemsdeletions', 'junkemail']);
-
 
 /**
  * Fields to request from the delta endpoint so each page contains
@@ -66,10 +67,21 @@ interface GraphDeltaMessage {
   id?: string;
   subject?: string;
   body?: { contentType?: string; content?: string };
+  hasAttachments?: boolean;
   receivedDateTime?: string;
   parentFolderId?: string;
   '@removed'?: { reason: string };
   [key: string]: unknown;
+}
+
+interface GraphAttachmentRecord {
+  '@odata.type'?: string;
+  id?: string;
+  name?: string;
+  contentType?: string;
+  size?: number;
+  isInline?: boolean;
+  contentBytes?: string;
 }
 
 @injectable()
@@ -86,7 +98,7 @@ export class GraphMailboxConnector implements MailboxConnector {
       const user_records = await this.collect_all_pages<GraphUserRecord>(url);
       return this.extract_user_ids(user_records);
     } catch (err) {
-      this.rethrow_if_access_denied(err);
+      rethrow_if_access_denied(err);
       throw err;
     }
   }
@@ -103,7 +115,7 @@ export class GraphMailboxConnector implements MailboxConnector {
       const folder_records = await this.collect_all_pages<GraphFolderRecord>(url);
       return this.filter_and_map_folders(folder_records);
     } catch (err) {
-      this.rethrow_if_access_denied(err);
+      rethrow_if_access_denied(err);
       throw err;
     }
   }
@@ -129,8 +141,8 @@ export class GraphMailboxConnector implements MailboxConnector {
     try {
       return await this.execute_delta_sync(mailbox_id, folder_id, prev_delta_link, false, on_page);
     } catch (err) {
-      this.rethrow_if_access_denied(err);
-      if (this.is_invalid_delta_error(err)) {
+      rethrow_if_access_denied(err);
+      if (is_invalid_delta_error(err)) {
         logger.debug('fetch_delta: invalid delta token, falling back to full sync');
         return await this.execute_delta_sync(mailbox_id, folder_id, undefined, true, on_page);
       }
@@ -151,9 +163,65 @@ export class GraphMailboxConnector implements MailboxConnector {
 
       return this.graph_message_to_mail_message(response);
     } catch (err) {
-      this.rethrow_if_access_denied(err);
+      rethrow_if_access_denied(err);
       throw err;
     }
+  }
+
+  /**
+   * Fetches file attachments for a message. Filters to fileAttachment type only,
+   * decodes contentBytes from base64. Logs a warning and skips storage for
+   * attachments where contentBytes is missing (typically >4MB).
+   */
+  async fetch_attachments(
+    _tenant_id: string,
+    mailbox_id: string,
+    message_id: string,
+  ): Promise<MessageAttachment[]> {
+    try {
+      const url = `/users/${mailbox_id}/messages/${message_id}/attachments`;
+      const records = await this.collect_all_pages<GraphAttachmentRecord>(url);
+      return this.map_file_attachments(records);
+    } catch (err) {
+      rethrow_if_access_denied(err);
+      throw err;
+    }
+  }
+
+  /** Filters to fileAttachment, decodes base64 content, warns on missing bytes. */
+  private map_file_attachments(records: GraphAttachmentRecord[]): MessageAttachment[] {
+    const results: MessageAttachment[] = [];
+
+    for (const r of records) {
+      if (r['@odata.type'] !== '#microsoft.graph.fileAttachment') continue;
+
+      if (!r.contentBytes) {
+        logger.warn(
+          `Attachment "${r.name ?? '?'}" (${r.size ?? 0} bytes) has no contentBytes -- ` +
+            `likely exceeds Graph API inline limit (>4MB). Metadata recorded, binary skipped.`,
+        );
+        results.push({
+          attachment_id: r.id ?? '',
+          name: r.name ?? '',
+          content_type: r.contentType ?? 'application/octet-stream',
+          size_bytes: r.size ?? 0,
+          is_inline: r.isInline === true,
+          content: Buffer.alloc(0),
+        });
+        continue;
+      }
+
+      results.push({
+        attachment_id: r.id ?? '',
+        name: r.name ?? '',
+        content_type: r.contentType ?? 'application/octet-stream',
+        size_bytes: r.size ?? 0,
+        is_inline: r.isInline === true,
+        content: Buffer.from(r.contentBytes, 'base64'),
+      });
+    }
+
+    return results;
   }
 
   // ---------------------------------------------------------------------------
@@ -248,6 +316,7 @@ export class GraphMailboxConnector implements MailboxConnector {
       received_at: msg.receivedDateTime ? new Date(msg.receivedDateTime) : new Date(),
       size_bytes: body_buffer.length,
       raw_body: body_buffer,
+      has_attachments: msg.hasAttachments === true,
     };
   }
 
@@ -286,50 +355,5 @@ export class GraphMailboxConnector implements MailboxConnector {
         parent_folder_id: f.parentFolderId ?? undefined,
         total_item_count: f.totalItemCount ?? 0,
       }));
-  }
-
-  // ---------------------------------------------------------------------------
-  // Error classification
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Detects Graph errors that indicate an invalid/expired delta token.
-   * Matches Corso's pattern: syncStateNotFound, resyncRequired, syncStateInvalid.
-   */
-  private is_invalid_delta_error(err: unknown): boolean {
-    const message = err instanceof Error ? err.message : String(err);
-    const lower = message.toLowerCase();
-    return (
-      lower.includes('syncstatenotfound') ||
-      lower.includes('resyncrequired') ||
-      lower.includes('syncstateinvalid')
-    );
-  }
-
-  /**
-   * Detects 403 ErrorAccessDenied from Graph and rethrows with
-   * actionable guidance about which API permissions to grant.
-   */
-  private rethrow_if_access_denied(err: unknown): void {
-    const graph_err = err as Record<string, unknown>;
-    if (graph_err.statusCode !== 403) return;
-
-    const required = [
-      'Mail.Read              – read mailbox messages',
-      'Mail.ReadWrite         – delta sync and full message fetch',
-      'User.Read.All          – list tenant users / mailboxes',
-      'MailboxSettings.Read   – enumerate mail folders',
-    ];
-
-    const hint =
-      `Microsoft Graph returned 403 Forbidden (ErrorAccessDenied).\n` +
-      `The app registration needs these Application permissions with admin consent:\n\n` +
-      required.map((p) => `  • ${p}`).join('\n') +
-      `\n\n` +
-      `Grant them in Azure Portal → App registrations → API permissions → ` +
-      `Add a permission → Microsoft Graph → Application permissions, ` +
-      `then click "Grant admin consent".`;
-
-    throw new Error(hint);
   }
 }

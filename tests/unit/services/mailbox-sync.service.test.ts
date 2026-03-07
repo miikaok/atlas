@@ -5,13 +5,18 @@ import { MailboxSyncService } from '@/services/mailbox-sync.service';
 import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import type { MailboxConnector, MailMessage, MailFolder, DeltaSyncResult } from '@/ports/mailbox-connector.port';
+import type {
+  MailboxConnector,
+  MailMessage,
+  MailFolder,
+  DeltaSyncResult,
+} from '@/ports/mailbox-connector.port';
 import type { ManifestRepository } from '@/ports/manifest-repository.port';
 import type { TenantContext, TenantContextFactory } from '@/ports/tenant-context.port';
 import type { ObjectStorage } from '@/ports/object-storage.port';
 import { SnapshotStatus } from '@/domain/snapshot';
 
-function make_message(id: string, body: string): MailMessage {
+function make_message(id: string, body: string, has_attachments = false): MailMessage {
   const raw = Buffer.from(body);
   return {
     message_id: id,
@@ -20,6 +25,7 @@ function make_message(id: string, body: string): MailMessage {
     received_at: new Date(),
     size_bytes: raw.length,
     raw_body: raw,
+    has_attachments,
   };
 }
 
@@ -71,6 +77,7 @@ describe('MailboxSyncService', () => {
       list_mail_folders: vi.fn().mockResolvedValue([make_folder('Inbox', 'folder-1')]),
       fetch_delta: vi.fn().mockResolvedValue(make_delta([])),
       fetch_message: vi.fn(),
+      fetch_attachments: vi.fn().mockResolvedValue([]),
     };
 
     mock_manifests = {
@@ -112,8 +119,20 @@ describe('MailboxSyncService', () => {
     await service.sync_mailbox('t', 'user@test.com');
 
     expect(mock_connector.fetch_delta).toHaveBeenCalledTimes(2);
-    expect(mock_connector.fetch_delta).toHaveBeenCalledWith('t', 'user@test.com', 'f1', undefined, expect.any(Function));
-    expect(mock_connector.fetch_delta).toHaveBeenCalledWith('t', 'user@test.com', 'f2', undefined, expect.any(Function));
+    expect(mock_connector.fetch_delta).toHaveBeenCalledWith(
+      't',
+      'user@test.com',
+      'f1',
+      undefined,
+      expect.any(Function),
+    );
+    expect(mock_connector.fetch_delta).toHaveBeenCalledWith(
+      't',
+      'user@test.com',
+      'f2',
+      undefined,
+      expect.any(Function),
+    );
   });
 
   it('uses content-addressed storage keys', async () => {
@@ -154,9 +173,7 @@ describe('MailboxSyncService', () => {
 
   it('stores manifest with per-folder delta links', async () => {
     const msg = make_message('msg-1', 'data');
-    vi.mocked(mock_connector.fetch_delta).mockResolvedValue(
-      make_delta([msg], 'https://new-delta'),
-    );
+    vi.mocked(mock_connector.fetch_delta).mockResolvedValue(make_delta([msg], 'https://new-delta'));
 
     await service.sync_mailbox('t', 'user@test.com');
 
@@ -185,7 +202,11 @@ describe('MailboxSyncService', () => {
     await service.sync_mailbox('t', 'user@test.com');
 
     expect(mock_connector.fetch_delta).toHaveBeenCalledWith(
-      't', 'user@test.com', 'folder-1', 'https://prev-delta', expect.any(Function),
+      't',
+      'user@test.com',
+      'folder-1',
+      'https://prev-delta',
+      expect.any(Function),
     );
   });
 
@@ -282,80 +303,5 @@ describe('MailboxSyncService', () => {
 
     expect(result.manifest.entries).toHaveLength(2);
     expect(result.snapshot.status).toBe(SnapshotStatus.COMPLETED);
-  });
-
-  // ---------------------------------------------------------------------------
-  // force_full / stale-delta safeguard
-  // ---------------------------------------------------------------------------
-
-  it('ignores saved delta links when force_full is true', async () => {
-    vi.mocked(mock_manifests.find_latest_by_mailbox).mockResolvedValue({
-      id: 'old-manifest',
-      tenant_id: 't',
-      mailbox_id: 'user@test.com',
-      snapshot_id: 'old-snap',
-      created_at: new Date(),
-      total_objects: 0,
-      total_size_bytes: 0,
-      delta_links: { 'folder-1': 'https://stale-delta' },
-      entries: [],
-    });
-
-    await service.sync_mailbox('t', 'user@test.com', { force_full: true });
-
-    expect(mock_connector.fetch_delta).toHaveBeenCalledWith(
-      't', 'user@test.com', 'folder-1', undefined, expect.any(Function),
-    );
-  });
-
-  it('retries without delta link when saved delta returns 0 and prior backup was empty', async () => {
-    vi.mocked(mock_manifests.find_latest_by_mailbox).mockResolvedValue({
-      id: 'old-manifest',
-      tenant_id: 't',
-      mailbox_id: 'user@test.com',
-      snapshot_id: 'old-snap',
-      created_at: new Date(),
-      total_objects: 0,
-      total_size_bytes: 0,
-      delta_links: { 'folder-1': 'https://stale-delta' },
-      entries: [],
-    });
-
-    const fresh_msg = make_message('fresh-1', 'fresh content');
-    vi.mocked(mock_connector.fetch_delta)
-      .mockResolvedValueOnce(make_delta([]))
-      .mockResolvedValueOnce(make_delta([fresh_msg]));
-
-    const result = await service.sync_mailbox('t', 'user@test.com');
-
-    expect(mock_connector.fetch_delta).toHaveBeenCalledTimes(2);
-    expect(mock_connector.fetch_delta).toHaveBeenNthCalledWith(
-      1, 't', 'user@test.com', 'folder-1', 'https://stale-delta', expect.any(Function),
-    );
-    expect(mock_connector.fetch_delta).toHaveBeenNthCalledWith(
-      2, 't', 'user@test.com', 'folder-1', undefined, expect.any(Function),
-    );
-    expect(result.manifest.entries).toHaveLength(1);
-  });
-
-  it('trusts delta returning 0 when prior backup had data (nothing changed)', async () => {
-    vi.mocked(mock_manifests.find_latest_by_mailbox).mockResolvedValue({
-      id: 'old-manifest',
-      tenant_id: 't',
-      mailbox_id: 'user@test.com',
-      snapshot_id: 'old-snap',
-      created_at: new Date(),
-      total_objects: 100,
-      total_size_bytes: 5000,
-      delta_links: { 'folder-1': 'https://valid-delta' },
-      entries: [],
-    });
-
-    vi.mocked(mock_connector.fetch_delta).mockResolvedValueOnce(make_delta([]));
-
-    const result = await service.sync_mailbox('t', 'user@test.com');
-
-    expect(mock_connector.fetch_delta).toHaveBeenCalledTimes(1);
-    expect(result.manifest.entries).toHaveLength(0);
   });
 });

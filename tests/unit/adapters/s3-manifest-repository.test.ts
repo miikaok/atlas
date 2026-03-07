@@ -29,8 +29,18 @@ function make_manifest(overrides: Partial<Manifest> = {}): Manifest {
     total_size_bytes: 1024,
     delta_links: { folder1: 'https://delta/link' },
     entries: [
-      { object_id: 'msg-1', storage_key: 'data/user@test.com/abc', checksum: 'abc', size_bytes: 512 },
-      { object_id: 'msg-2', storage_key: 'data/user@test.com/def', checksum: 'def', size_bytes: 512 },
+      {
+        object_id: 'msg-1',
+        storage_key: 'data/user@test.com/abc',
+        checksum: 'abc',
+        size_bytes: 512,
+      },
+      {
+        object_id: 'msg-2',
+        storage_key: 'data/user@test.com/def',
+        checksum: 'def',
+        size_bytes: 512,
+      },
     ],
     ...overrides,
   };

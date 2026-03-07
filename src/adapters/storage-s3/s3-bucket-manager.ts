@@ -1,8 +1,4 @@
-import {
-  CreateBucketCommand,
-  HeadBucketCommand,
-  type S3Client,
-} from '@aws-sdk/client-s3';
+import { CreateBucketCommand, HeadBucketCommand, type S3Client } from '@aws-sdk/client-s3';
 
 const _checked_buckets = new Set<string>();
 

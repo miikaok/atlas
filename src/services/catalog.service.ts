@@ -3,7 +3,7 @@ import type { TenantContextFactory } from '@/ports/tenant-context.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
 import type { ManifestRepository } from '@/ports/manifest-repository.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
-import type { Manifest } from '@/domain/manifest';
+import type { Manifest, AttachmentEntry } from '@/domain/manifest';
 
 export interface MailboxSummary {
   readonly mailbox_id: string;
@@ -11,6 +11,11 @@ export interface MailboxSummary {
   readonly total_objects: number;
   readonly total_size_bytes: number;
   readonly last_backup_at: Date;
+}
+
+export interface ReadMessageResult {
+  readonly message: Record<string, unknown>;
+  readonly attachments: AttachmentEntry[];
 }
 
 @injectable()
@@ -51,13 +56,14 @@ export class CatalogService {
 
   /**
    * Finds a message entry in the manifest, fetches the encrypted blob
-   * from object storage, decrypts it, and returns the parsed JSON.
+   * from object storage, decrypts it, and returns the parsed JSON
+   * together with any attachment metadata from the manifest.
    */
   async read_message(
     tenant_id: string,
     snapshot_id: string,
     message_id: string,
-  ): Promise<Record<string, unknown> | undefined> {
+  ): Promise<ReadMessageResult | undefined> {
     const ctx = await this._tenant_factory.create(tenant_id);
     const manifest = await this._manifests.find_by_snapshot(ctx, snapshot_id);
     if (!manifest) return undefined;
@@ -67,7 +73,8 @@ export class CatalogService {
 
     const encrypted = await ctx.storage.get(entry.storage_key);
     const json = ctx.decrypt(encrypted);
-    return JSON.parse(json.toString('utf-8')) as Record<string, unknown>;
+    const message = JSON.parse(json.toString('utf-8')) as Record<string, unknown>;
+    return { message, attachments: entry.attachments ?? [] };
   }
 }
 
@@ -87,9 +94,7 @@ function build_mailbox_summaries(groups: Map<string, Manifest[]>): MailboxSummar
   const summaries: MailboxSummary[] = [];
 
   for (const [mailbox_id, manifests] of groups) {
-    manifests.sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
+    manifests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     const latest = manifests[0]!;
 
     summaries.push({
