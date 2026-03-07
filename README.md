@@ -1,6 +1,6 @@
 # m365-atlas
 
-CLI tool for backing up Microsoft 365 mailboxes to S3-compatible object storage with per-tenant encryption, content-addressed deduplication, and delta sync.
+An open-source CLI backup engine for Microsoft 365 mailboxes, designed with per-tenant encryption, content-addressed storage, and efficient delta synchronization for scalable, secure backups.
 
 ## Highlights
 
