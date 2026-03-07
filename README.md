@@ -270,4 +270,7 @@ Tests use Vitest with `@vitest/coverage-v8`. Services are tested via Inversify c
 
 ## License
 
-ISC
+Copyright © 2026 Miika Oja-Kaukola
+
+This project is licensed under the Apache License, Version 2.0.  
+See the [LICENSE](./LICENSE) file for details.
