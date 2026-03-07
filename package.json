@@ -1,0 +1,51 @@
+{
+  "name": "m365-atlas",
+  "version": "1.0.0",
+  "description": "M365 email backup CLI – pull and archive O365 mailboxes to S3-compatible object storage",
+  "type": "module",
+  "bin": {
+    "atlas": "dist/cli.mjs"
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "keywords": [
+    "m365",
+    "backup",
+    "email",
+    "o365",
+    "s3",
+    "minio"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-check-file": "^3.3.1",
+    "prettier": "^3.8.1",
+    "tsdown": "^0.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1004.0",
+    "@azure/identity": "^4.13.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "dotenv": "^17.3.1",
+    "inversify": "^7.11.0",
+    "reflect-metadata": "^0.2.2"
+  }
+}

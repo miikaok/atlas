@@ -1,0 +1,92 @@
+import { injectable } from 'inversify';
+import type { Manifest } from '@/domain/manifest';
+import type { ManifestRepository } from '@/ports/manifest-repository.port';
+import type { TenantContext } from '@/ports/tenant-context.port';
+
+const MANIFEST_PREFIX = 'manifests';
+
+/** Constructs the S3 key for a manifest. */
+function manifest_key(mailbox_id: string, snapshot_id: string): string {
+  return `${MANIFEST_PREFIX}/${mailbox_id}/${snapshot_id}.json`;
+}
+
+/**
+ * Stores manifests as encrypted JSON in the tenant's S3 bucket.
+ * Key layout: manifests/{mailbox_id}/{snapshot_id}.json
+ */
+@injectable()
+export class S3ManifestRepository implements ManifestRepository {
+  /** Serializes, encrypts, and uploads a manifest. */
+  async save(ctx: TenantContext, manifest: Manifest): Promise<void> {
+    const key = manifest_key(manifest.mailbox_id, manifest.snapshot_id);
+    const json = Buffer.from(JSON.stringify(manifest));
+    const encrypted = ctx.encrypt(json);
+    await ctx.storage.put(key, encrypted);
+  }
+
+  /** Searches all mailbox prefixes for a manifest matching the snapshot ID. */
+  async find_by_snapshot(ctx: TenantContext, snapshot_id: string): Promise<Manifest | undefined> {
+    const all_keys = await ctx.storage.list(`${MANIFEST_PREFIX}/`);
+    const target_suffix = `/${snapshot_id}.json`;
+    const match = all_keys.find((k) => k.endsWith(target_suffix));
+
+    if (!match) return undefined;
+    return this.download_and_decrypt(ctx, match);
+  }
+
+  /**
+   * Lists manifests for a mailbox, parses their created_at timestamps,
+   * and returns the most recent one.
+   */
+  async find_latest_by_mailbox(
+    ctx: TenantContext,
+    mailbox_id: string,
+  ): Promise<Manifest | undefined> {
+    const prefix = `${MANIFEST_PREFIX}/${mailbox_id}/`;
+    const keys = await ctx.storage.list(prefix);
+
+    if (keys.length === 0) return undefined;
+
+    let latest: Manifest | undefined;
+
+    for (const key of keys) {
+      const manifest = await this.download_and_decrypt(ctx, key);
+      if (!manifest) continue;
+
+      const is_newer =
+        !latest || new Date(manifest.created_at).getTime() > new Date(latest.created_at).getTime();
+      if (is_newer) {
+        latest = manifest;
+      }
+    }
+
+    return latest;
+  }
+
+  /** Downloads and decrypts every manifest in the tenant bucket. */
+  async list_all_manifests(ctx: TenantContext): Promise<Manifest[]> {
+    const keys = await ctx.storage.list(`${MANIFEST_PREFIX}/`);
+    const results: Manifest[] = [];
+
+    for (const key of keys) {
+      const manifest = await this.download_and_decrypt(ctx, key);
+      if (manifest) results.push(manifest);
+    }
+
+    return results;
+  }
+
+  /** Downloads an encrypted manifest blob, decrypts it, and parses the JSON. */
+  private async download_and_decrypt(
+    ctx: TenantContext,
+    key: string,
+  ): Promise<Manifest | undefined> {
+    try {
+      const encrypted = await ctx.storage.get(key);
+      const json = ctx.decrypt(encrypted);
+      return JSON.parse(json.toString('utf-8')) as Manifest;
+    } catch {
+      return undefined;
+    }
+  }
+}

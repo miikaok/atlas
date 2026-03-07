@@ -1,0 +1,12 @@
+src/
+tests/
+coverage/
+docker/
+.env
+.env.*
+.gitignore
+.prettierrc
+eslint.config.js
+vitest.config.ts
+tsconfig.json
+*.tsbuildinfo

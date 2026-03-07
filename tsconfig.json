@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "lib": ["esnext"],
+    "types": ["node", "reflect-metadata"],
+
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    "exactOptionalPropertyTypes": true,
+
+    "strict": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "tests"]
+}
