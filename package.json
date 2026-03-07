@@ -1,7 +1,7 @@
 {
   "name": "m365-atlas",
   "version": "1.0.0",
-  "description": "M365 email backup CLI – pull and archive O365 mailboxes to S3-compatible object storage",
+  "description": "An open-source CLI backup engine for Microsoft 365 mailboxes, designed with per-tenant encryption, content-addressed storage, and efficient delta synchronization for scalable, secure backups.",
   "type": "module",
   "bin": {
     "atlas": "dist/cli.mjs"
@@ -24,8 +24,8 @@
     "s3",
     "minio"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Miika Oja-Kaukola",
+  "license": "Apache-2.0",
   "devDependencies": {
     "@types/node": "^25.3.5",
     "@vitest/coverage-v8": "^4.0.18",
