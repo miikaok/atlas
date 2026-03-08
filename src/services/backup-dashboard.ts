@@ -136,7 +136,12 @@ export class BackupDashboard {
   }
 
   /** Updates the TOTAL row at the bottom. */
-  update_total(global_processed: number, global_total: number, rate: number, eta_seconds: number): void {
+  update_total(
+    global_processed: number,
+    global_total: number,
+    rate: number,
+    eta_seconds: number,
+  ): void {
     this._total.global_processed = global_processed;
     this._total.global_total = global_total;
     this._total.rate = rate;

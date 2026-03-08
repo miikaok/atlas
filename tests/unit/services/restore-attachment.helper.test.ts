@@ -54,7 +54,12 @@ describe('restore_entry_attachments', () => {
   it('restores a small attachment', async () => {
     const att = make_attachment();
     const result = await restore_entry_attachments(
-      ctx, connector, 'tenant', 'user@test.com', 'new-msg-1', [att],
+      ctx,
+      connector,
+      'tenant',
+      'user@test.com',
+      'new-msg-1',
+      [att],
     );
 
     expect(result.restored).toBe(1);
@@ -63,7 +68,9 @@ describe('restore_entry_attachments', () => {
     expect(ctx.storage.get).toHaveBeenCalledWith('attachments/user/sha256hash');
     expect(ctx.decrypt).toHaveBeenCalled();
     expect(connector.add_attachment).toHaveBeenCalledWith(
-      'tenant', 'user@test.com', 'new-msg-1',
+      'tenant',
+      'user@test.com',
+      'new-msg-1',
       expect.objectContaining({ name: 'report.pdf', content_type: 'application/pdf' }),
     );
   });
@@ -71,7 +78,12 @@ describe('restore_entry_attachments', () => {
   it('skips attachments without storage_key', async () => {
     const att = make_attachment({ storage_key: '', checksum: '' });
     const result = await restore_entry_attachments(
-      ctx, connector, 'tenant', 'user@test.com', 'new-msg-1', [att],
+      ctx,
+      connector,
+      'tenant',
+      'user@test.com',
+      'new-msg-1',
+      [att],
     );
 
     expect(result.restored).toBe(0);
@@ -86,7 +98,11 @@ describe('restore_entry_attachments', () => {
     );
 
     const result = await restore_entry_attachments(
-      ctx, connector, 'tenant', 'user@test.com', 'new-msg-1',
+      ctx,
+      connector,
+      'tenant',
+      'user@test.com',
+      'new-msg-1',
       [make_attachment(), make_attachment({ attachment_id: 'att-2', name: 'photo.jpg' })],
     );
 
@@ -102,7 +118,12 @@ describe('restore_entry_attachments', () => {
     ];
 
     const result = await restore_entry_attachments(
-      ctx, connector, 'tenant', 'user@test.com', 'msg-1', atts,
+      ctx,
+      connector,
+      'tenant',
+      'user@test.com',
+      'msg-1',
+      atts,
     );
 
     expect(result.restored).toBe(2);

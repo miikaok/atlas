@@ -17,10 +17,7 @@ import {
   filter_entries_by_folder_name,
   count_unique_folders,
 } from '@/services/restore-folder.helper';
-import {
-  filter_manifests_by_date,
-  merge_snapshot_entries,
-} from '@/services/restore-merge.helper';
+import { filter_manifests_by_date, merge_snapshot_entries } from '@/services/restore-merge.helper';
 import {
   restore_single_message,
   restore_folder_entries,
@@ -81,8 +78,14 @@ export class RestoreService {
 
     if (options.message_ref) {
       return restore_single_message(
-        ctx, this._connector, this._restore_connector,
-        tenant_id, source_mailbox, target_mailbox, snapshot_id, entries[0]!,
+        ctx,
+        this._connector,
+        this._restore_connector,
+        tenant_id,
+        source_mailbox,
+        target_mailbox,
+        snapshot_id,
+        entries[0]!,
       );
     }
 
@@ -221,8 +224,15 @@ export class RestoreService {
     );
 
     return this.execute_restore_loop(
-      ctx, tenant_id, target_mailbox, snapshot_id, root, groups,
-      folder_map, created_folders, dashboard,
+      ctx,
+      tenant_id,
+      target_mailbox,
+      snapshot_id,
+      root,
+      groups,
+      folder_map,
+      created_folders,
+      dashboard,
     );
   }
 
@@ -238,13 +248,17 @@ export class RestoreService {
     created_folders: Map<string, string>,
     dashboard: RestoreDashboard,
   ): Promise<RestoreResult> {
-    let global_restored = 0, global_att = 0, global_errors = 0;
+    let global_restored = 0,
+      global_att = 0,
+      global_errors = 0;
     const all_errors: string[] = [];
     const start = Date.now();
     const global_total = [...groups.values()].reduce((s, g) => s + g.length, 0);
 
     this._interrupted = false;
-    const on_sigint = (): void => { this._interrupted = true; };
+    const on_sigint = (): void => {
+      this._interrupted = true;
+    };
     process.on('SIGINT', on_sigint);
 
     try {
@@ -254,13 +268,27 @@ export class RestoreService {
         dashboard.mark_active(folder_index);
 
         const target_fid = await ensure_subfolder(
-          this._restore_connector, tenant_id, target_mailbox,
-          root.folder_id, fid, folder_map, created_folders,
+          this._restore_connector,
+          tenant_id,
+          target_mailbox,
+          root.folder_id,
+          fid,
+          folder_map,
+          created_folders,
         );
 
         const result = await restore_folder_entries(
-          ctx, this._restore_connector, tenant_id, target_mailbox, target_fid,
-          folder_items, folder_index, global_restored, global_total, start, dashboard,
+          ctx,
+          this._restore_connector,
+          tenant_id,
+          target_mailbox,
+          target_fid,
+          folder_items,
+          folder_index,
+          global_restored,
+          global_total,
+          start,
+          dashboard,
           () => this._interrupted,
         );
 
@@ -283,8 +311,11 @@ export class RestoreService {
       log_restore_summary(global_restored, global_att, global_errors, start);
 
       return {
-        snapshot_id, restored_count: global_restored, attachment_count: global_att,
-        error_count: global_errors, errors: all_errors,
+        snapshot_id,
+        restored_count: global_restored,
+        attachment_count: global_att,
+        error_count: global_errors,
+        errors: all_errors,
         restore_folder_name: root.display_name,
       };
     } finally {
@@ -293,8 +324,12 @@ export class RestoreService {
   }
   private empty_result(snapshot_id: string): RestoreResult {
     return {
-      snapshot_id, restored_count: 0, attachment_count: 0,
-      error_count: 0, errors: [], restore_folder_name: '',
+      snapshot_id,
+      restored_count: 0,
+      attachment_count: 0,
+      error_count: 0,
+      errors: [],
+      restore_folder_name: '',
     };
   }
 }

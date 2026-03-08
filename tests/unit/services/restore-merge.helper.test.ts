@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  merge_snapshot_entries,
-  filter_manifests_by_date,
-} from '@/services/restore-merge.helper';
+import { merge_snapshot_entries, filter_manifests_by_date } from '@/services/restore-merge.helper';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
 
 function make_entry(id: string, folder_id = 'f1'): ManifestEntry {
@@ -96,11 +93,7 @@ describe('filter_manifests_by_date', () => {
   });
 
   it('filters by both start and end date', () => {
-    const result = filter_manifests_by_date(
-      all,
-      new Date('2026-03-02'),
-      new Date('2026-03-08'),
-    );
+    const result = filter_manifests_by_date(all, new Date('2026-03-02'), new Date('2026-03-08'));
     expect(result).toHaveLength(1);
     expect(result[0]!.snapshot_id).toBe('s2');
   });

@@ -123,8 +123,6 @@ function build_mapi_overrides(
  * Extracts the parentFolderId from a decrypted Graph message JSON.
  * Used as fallback when ManifestEntry.folder_id is not populated (legacy manifests).
  */
-export function extract_folder_id_from_json(
-  message_json: Record<string, unknown>,
-): string {
+export function extract_folder_id_from_json(message_json: Record<string, unknown>): string {
   return (message_json['parentFolderId'] as string) ?? '__unknown__';
 }

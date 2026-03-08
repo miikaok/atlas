@@ -28,9 +28,7 @@ export async function restore_entry_attachments(
 
   for (const att of attachments) {
     if (!att.storage_key) {
-      logger.warn(
-        `Attachment "${att.name}" was not backed up (too large) -- skipping restore`,
-      );
+      logger.warn(`Attachment "${att.name}" was not backed up (too large) -- skipping restore`);
       skipped++;
       continue;
     }
@@ -56,10 +54,7 @@ export async function restore_entry_attachments(
 }
 
 /** Fetches and decrypts a single attachment binary from object storage. */
-async function decrypt_attachment(
-  ctx: TenantContext,
-  storage_key: string,
-): Promise<Buffer> {
+async function decrypt_attachment(ctx: TenantContext, storage_key: string): Promise<Buffer> {
   const ciphertext = await ctx.storage.get(storage_key);
   return ctx.decrypt(ciphertext);
 }

@@ -31,13 +31,21 @@ export async function restore_one_entry(
   const json = await decrypt_and_parse_message(ctx, entry);
   const sanitized = sanitize_message_for_restore(json);
   const new_msg_id = await restore_connector.create_message(
-    tenant_id, mailbox_id, target_folder_id, sanitized,
+    tenant_id,
+    mailbox_id,
+    target_folder_id,
+    sanitized,
   );
 
   let att = 0;
   if (entry.attachments && entry.attachments.length > 0) {
     const result = await restore_entry_attachments(
-      ctx, restore_connector, tenant_id, mailbox_id, new_msg_id, entry.attachments,
+      ctx,
+      restore_connector,
+      tenant_id,
+      mailbox_id,
+      new_msg_id,
+      entry.attachments,
     );
     att = result.restored;
   }
@@ -60,7 +68,8 @@ export async function restore_folder_entries(
   dashboard: RestoreDashboard,
   is_interrupted: () => boolean,
 ): Promise<{ restored: number; attachments: number; errors: string[] }> {
-  let restored = 0, attachments = 0;
+  let restored = 0,
+    attachments = 0;
   const errors: string[] = [];
 
   for (const entry of entries) {
@@ -68,7 +77,12 @@ export async function restore_folder_entries(
 
     try {
       const { att } = await restore_one_entry(
-        ctx, restore_connector, tenant_id, mailbox_id, target_folder_id, entry,
+        ctx,
+        restore_connector,
+        tenant_id,
+        mailbox_id,
+        target_folder_id,
+        entry,
       );
       restored++;
       attachments += att;
@@ -105,27 +119,44 @@ export async function restore_single_message(
   const folder_map = await build_folder_map(connector, tenant_id, source_mailbox);
   const created_folders = new Map<string, string>();
   const target_fid = await ensure_subfolder(
-    restore_connector, tenant_id, target_mailbox,
-    root.folder_id, folder_id, folder_map, created_folders,
+    restore_connector,
+    tenant_id,
+    target_mailbox,
+    root.folder_id,
+    folder_id,
+    folder_map,
+    created_folders,
   );
 
   const sanitized = sanitize_message_for_restore(message_json);
   const new_msg_id = await restore_connector.create_message(
-    tenant_id, target_mailbox, target_fid, sanitized,
+    tenant_id,
+    target_mailbox,
+    target_fid,
+    sanitized,
   );
 
   let att_count = 0;
   if (entry.attachments && entry.attachments.length > 0) {
     const att_result = await restore_entry_attachments(
-      ctx, restore_connector, tenant_id, target_mailbox, new_msg_id, entry.attachments,
+      ctx,
+      restore_connector,
+      tenant_id,
+      target_mailbox,
+      new_msg_id,
+      entry.attachments,
     );
     att_count = att_result.restored;
   }
 
   logger.success(`Restored 1 message${att_count > 0 ? ` + ${att_count} attachments` : ''}`);
   return {
-    snapshot_id, restored_count: 1, attachment_count: att_count,
-    error_count: 0, errors: [], restore_folder_name: root.display_name,
+    snapshot_id,
+    restored_count: 1,
+    attachment_count: att_count,
+    error_count: 0,
+    errors: [],
+    restore_folder_name: root.display_name,
   };
 }
 

@@ -118,8 +118,9 @@ describe('RestoreService', () => {
 
   it('throws when manifest not found', async () => {
     (mock_manifests.find_by_snapshot as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
-    await expect(service.restore_snapshot('test-tenant', 'bad-snap'))
-      .rejects.toThrow('No manifest found');
+    await expect(service.restore_snapshot('test-tenant', 'bad-snap')).rejects.toThrow(
+      'No manifest found',
+    );
   });
 
   it('returns empty result when no entries match', async () => {
@@ -163,15 +164,17 @@ describe('RestoreService', () => {
   it('restores attachments alongside messages', async () => {
     const entry: ManifestEntry = {
       ...make_entry('msg-1', 'f1'),
-      attachments: [{
-        attachment_id: 'a1',
-        name: 'file.pdf',
-        content_type: 'application/pdf',
-        size_bytes: 512,
-        storage_key: 'attachments/user/hash1',
-        checksum: 'hash1',
-        is_inline: false,
-      }],
+      attachments: [
+        {
+          attachment_id: 'a1',
+          name: 'file.pdf',
+          content_type: 'application/pdf',
+          size_bytes: 512,
+          storage_key: 'attachments/user/hash1',
+          checksum: 'hash1',
+          is_inline: false,
+        },
+      ],
     };
     const manifest = make_manifest([entry]);
     (mock_manifests.find_by_snapshot as ReturnType<typeof vi.fn>).mockResolvedValue(manifest);
@@ -192,10 +195,7 @@ describe('RestoreService', () => {
       target_mailbox: 'USER@Test.COM',
     });
 
-    expect(mock_connector.list_mail_folders).toHaveBeenCalledWith(
-      'test-tenant',
-      'user@test.com',
-    );
+    expect(mock_connector.list_mail_folders).toHaveBeenCalledWith('test-tenant', 'user@test.com');
   });
 
   describe('restore_mailbox', () => {
@@ -238,8 +238,10 @@ describe('RestoreService', () => {
         created_at: new Date('2026-03-08'),
       };
 
-      (mock_manifests.list_all_manifests as ReturnType<typeof vi.fn>)
-        .mockResolvedValue([old_manifest, new_manifest]);
+      (mock_manifests.list_all_manifests as ReturnType<typeof vi.fn>).mockResolvedValue([
+        old_manifest,
+        new_manifest,
+      ]);
 
       const result = await service.restore_mailbox('test-tenant', 'user@test.com', {
         start_date: new Date('2026-03-01'),
@@ -255,17 +257,13 @@ describe('RestoreService', () => {
         created_at: new Date('2026-03-08'),
       };
 
-      (mock_manifests.list_all_manifests as ReturnType<typeof vi.fn>)
-        .mockResolvedValue([manifest]);
+      (mock_manifests.list_all_manifests as ReturnType<typeof vi.fn>).mockResolvedValue([manifest]);
 
       await service.restore_mailbox('test-tenant', 'user@test.com', {
         target_mailbox: 'OTHER@TEST.COM',
       });
 
-      expect(mock_connector.list_mail_folders).toHaveBeenCalledWith(
-        'test-tenant',
-        'user@test.com',
-      );
+      expect(mock_connector.list_mail_folders).toHaveBeenCalledWith('test-tenant', 'user@test.com');
       expect(mock_restore.create_mail_folder).toHaveBeenCalledWith(
         'test-tenant',
         'other@test.com',

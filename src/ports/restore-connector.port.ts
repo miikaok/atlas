@@ -55,11 +55,7 @@ export interface RestoreConnector {
   ): Promise<void>;
 
   /** Returns the total message count in a folder (for verification). */
-  count_folder_messages(
-    tenant_id: string,
-    mailbox_id: string,
-    folder_id: string,
-  ): Promise<number>;
+  count_folder_messages(tenant_id: string, mailbox_id: string, folder_id: string): Promise<number>;
 
   /** Lists messages in a folder with basic properties (for verification). */
   list_folder_messages(

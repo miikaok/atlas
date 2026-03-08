@@ -114,7 +114,11 @@ describe('GraphRestoreConnector', () => {
       });
 
       const session = await connector.create_upload_session(
-        't', 'user@test.com', 'msg-1', 'bigfile.zip', 10_000_000,
+        't',
+        'user@test.com',
+        'msg-1',
+        'bigfile.zip',
+        10_000_000,
       );
 
       expect(session.upload_url).toBe('https://upload.example.com/session');

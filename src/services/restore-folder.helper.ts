@@ -53,7 +53,10 @@ export async function ensure_subfolder(
 
   const display_name = folder_map.get(original_folder_id) ?? UNKNOWN_FOLDER_NAME;
   const folder = await restore_connector.create_mail_folder(
-    tenant_id, mailbox_id, display_name, root_folder_id,
+    tenant_id,
+    mailbox_id,
+    display_name,
+    root_folder_id,
   );
 
   created_folders.set(original_folder_id, folder.folder_id);
@@ -64,9 +67,7 @@ export async function ensure_subfolder(
  * Groups manifest entries by folder_id. For entries without folder_id
  * (legacy manifests), falls back to extracting from decrypted message JSON.
  */
-export function group_entries_by_folder(
-  entries: ManifestEntry[],
-): Map<string, ManifestEntry[]> {
+export function group_entries_by_folder(entries: ManifestEntry[]): Map<string, ManifestEntry[]> {
   const groups = new Map<string, ManifestEntry[]>();
 
   for (const entry of entries) {

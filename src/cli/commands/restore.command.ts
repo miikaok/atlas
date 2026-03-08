@@ -142,9 +142,10 @@ async function execute_mailbox_restore(
 
 /** Prints a human-readable summary of the restore result. */
 function report_restore_result(result: RestoreResult): void {
-  const att_info = result.attachment_count > 0
-    ? ` + ${chalk.cyan(String(result.attachment_count))} attachments`
-    : '';
+  const att_info =
+    result.attachment_count > 0
+      ? ` + ${chalk.cyan(String(result.attachment_count))} attachments`
+      : '';
 
   if (result.error_count === 0) {
     logger.success(

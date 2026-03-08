@@ -46,9 +46,9 @@ export class GraphRestoreConnector implements RestoreConnector {
       : `/users/${mailbox_id}/mailFolders`;
 
     try {
-      const response = await with_graph_retry(() =>
+      const response = (await with_graph_retry(() =>
         this._client.api(url).post({ displayName: display_name }),
-      ) as GraphFolderResponse;
+      )) as GraphFolderResponse;
 
       return {
         folder_id: response.id ?? '',
@@ -72,9 +72,9 @@ export class GraphRestoreConnector implements RestoreConnector {
     const url = `/users/${mailbox_id}/mailFolders/${folder_id}/messages`;
 
     try {
-      const response = await with_graph_retry(() =>
+      const response = (await with_graph_retry(() =>
         this._client.api(url).post(message_body),
-      ) as GraphMessageResponse;
+      )) as GraphMessageResponse;
 
       if (!response.id) throw new Error('Graph returned no message ID after create');
       return response.id;
@@ -131,9 +131,9 @@ export class GraphRestoreConnector implements RestoreConnector {
     };
 
     try {
-      const response = await with_graph_retry(() =>
+      const response = (await with_graph_retry(() =>
         this._client.api(url).post(payload),
-      ) as GraphUploadSessionResponse;
+      )) as GraphUploadSessionResponse;
 
       if (!response.uploadUrl) throw new Error('Graph returned no uploadUrl for session');
       return { upload_url: response.uploadUrl, expiration: response.expirationDateTime ?? '' };
@@ -169,7 +169,7 @@ export class GraphRestoreConnector implements RestoreConnector {
     folder_id: string,
   ): Promise<number> {
     const url = `/users/${mailbox_id}/mailFolders/${folder_id}?$select=totalItemCount`;
-    const response = await with_graph_retry(() => this._client.api(url).get()) as {
+    const response = (await with_graph_retry(() => this._client.api(url).get())) as {
       totalItemCount?: number;
     };
     return response.totalItemCount ?? 0;
@@ -185,7 +185,7 @@ export class GraphRestoreConnector implements RestoreConnector {
     const url =
       `/users/${mailbox_id}/mailFolders/${folder_id}/messages` +
       `?$select=subject,isDraft&$top=${top}`;
-    const response = await with_graph_retry(() => this._client.api(url).get()) as {
+    const response = (await with_graph_retry(() => this._client.api(url).get())) as {
       value?: Array<{ subject?: string; isDraft?: boolean }>;
     };
     return (response.value ?? []).map((m) => ({
@@ -206,14 +206,23 @@ export class GraphRestoreConnector implements RestoreConnector {
     );
 
     const session = await this.create_upload_session(
-      tenant_id, mailbox_id, message_id, attachment.name, attachment.content.length,
+      tenant_id,
+      mailbox_id,
+      message_id,
+      attachment.name,
+      attachment.content.length,
     );
 
     let offset = 0;
     while (offset < attachment.content.length) {
       const end = Math.min(offset + UPLOAD_CHUNK_SIZE, attachment.content.length);
       const chunk = attachment.content.subarray(offset, end);
-      await this.upload_attachment_chunk(session.upload_url, chunk, offset, attachment.content.length);
+      await this.upload_attachment_chunk(
+        session.upload_url,
+        chunk,
+        offset,
+        attachment.content.length,
+      );
       offset = end;
     }
   }

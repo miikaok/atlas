@@ -59,8 +59,12 @@ export class RestoreDashboard {
   }
 
   update_active(
-    index: number, processed: number, restored: number, attachments: number,
-    rate: number, eta_seconds: number,
+    index: number,
+    processed: number,
+    restored: number,
+    attachments: number,
+    rate: number,
+    eta_seconds: number,
   ): void {
     const row = this._rows[index];
     if (!row) return;
@@ -116,8 +120,10 @@ export class RestoreDashboard {
   }
 
   update_total(
-    global_processed: number, global_total: number,
-    rate: number, eta_seconds: number,
+    global_processed: number,
+    global_total: number,
+    rate: number,
+    eta_seconds: number,
   ): void {
     this._total.global_processed = global_processed;
     this._total.global_total = global_total;

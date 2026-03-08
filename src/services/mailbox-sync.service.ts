@@ -11,7 +11,11 @@ import type { ManifestEntry } from '@/domain/manifest';
 import { fetch_and_store_attachments } from '@/services/attachment-sync.helper';
 import { calc_rate } from '@/services/sync-progress.helper';
 import { BackupDashboard } from '@/services/backup-dashboard';
-import { build_manifest, create_pending_snapshot, mark_snapshot_completed } from '@/services/sync-manifest.helper';
+import {
+  build_manifest,
+  create_pending_snapshot,
+  mark_snapshot_completed,
+} from '@/services/sync-manifest.helper';
 import { logger } from '@/utils/logger';
 import type { Snapshot } from '@/domain/snapshot';
 import type { Manifest } from '@/domain/manifest';
@@ -66,12 +70,17 @@ export class MailboxSyncService {
 
     const all_entries: ManifestEntry[] = [];
     const new_delta_links: Record<string, string> = {};
-    let global_processed = 0, stored = 0, deduplicated = 0, attachments_stored = 0;
+    let global_processed = 0,
+      stored = 0,
+      deduplicated = 0,
+      attachments_stored = 0;
     const folder_errors: string[] = [];
     const sync_start = Date.now();
 
     this._interrupted = false;
-    const on_sigint = (): void => { this._interrupted = true; };
+    const on_sigint = (): void => {
+      this._interrupted = true;
+    };
     process.on('SIGINT', on_sigint);
 
     try {
@@ -80,13 +89,24 @@ export class MailboxSyncService {
         const folder = folders[i]!;
         dashboard.mark_active(i);
 
-        let f_stored = 0, f_deduped = 0, f_att = 0;
+        let f_stored = 0,
+          f_deduped = 0,
+          f_att = 0;
         try {
           const prev_link = saved_links[folder.folder_id];
           const result = await this.sync_single_folder(
-            ctx, tenant_id, mailbox_id, folder.folder_id, i,
-            folder.total_item_count, global_total, global_processed, sync_start,
-            dashboard, prev_link, previous_entry_count,
+            ctx,
+            tenant_id,
+            mailbox_id,
+            folder.folder_id,
+            i,
+            folder.total_item_count,
+            global_total,
+            global_processed,
+            sync_start,
+            dashboard,
+            prev_link,
+            previous_entry_count,
           );
           all_entries.push(...result.entries);
           if (!this._interrupted) {
@@ -124,7 +144,11 @@ export class MailboxSyncService {
 
       const merged_links = { ...saved_links, ...new_delta_links };
       const manifest = build_manifest(
-        mailbox_id, snapshot.id, all_entries, merged_links, previous_entry_count,
+        mailbox_id,
+        snapshot.id,
+        all_entries,
+        merged_links,
+        previous_entry_count,
       );
       await this._manifests.save(ctx, manifest);
 
@@ -164,8 +188,11 @@ export class MailboxSyncService {
 
   /** Prints a summary line after the folder loop finishes. */
   private log_summary(
-    stored: number, deduplicated: number, attachments_stored: number,
-    error_count: number, sync_start: number,
+    stored: number,
+    deduplicated: number,
+    attachments_stored: number,
+    error_count: number,
+    sync_start: number,
   ): void {
     const elapsed_s = ((Date.now() - sync_start) / 1000).toFixed(1);
     logger.info(
@@ -232,17 +259,33 @@ export class MailboxSyncService {
     };
 
     let delta = await this._connector.fetch_delta(
-      tenant_id, mailbox_id, folder_id, prev_delta_link, on_page,
+      tenant_id,
+      mailbox_id,
+      folder_id,
+      prev_delta_link,
+      on_page,
     );
 
-    if (prev_delta_link && delta.messages.length === 0 && folder_total > 0 && previous_manifest_entries === 0) {
+    if (
+      prev_delta_link &&
+      delta.messages.length === 0 &&
+      folder_total > 0 &&
+      previous_manifest_entries === 0
+    ) {
       delta = await this._connector.fetch_delta(
-        tenant_id, mailbox_id, folder_id, undefined, on_page,
+        tenant_id,
+        mailbox_id,
+        folder_id,
+        undefined,
+        on_page,
       );
     }
 
     const entries: ManifestEntry[] = [];
-    let stored = 0, deduplicated = 0, att_stored = 0, folder_processed = 0;
+    let stored = 0,
+      deduplicated = 0,
+      att_stored = 0,
+      folder_processed = 0;
 
     for (const message of delta.messages) {
       if (this._interrupted) break;
@@ -253,7 +296,11 @@ export class MailboxSyncService {
 
       const attachment_entries = message.has_attachments
         ? await fetch_and_store_attachments(
-            ctx, this._connector, tenant_id, mailbox_id, message.message_id,
+            ctx,
+            this._connector,
+            tenant_id,
+            mailbox_id,
+            message.message_id,
           )
         : undefined;
 
@@ -274,8 +321,12 @@ export class MailboxSyncService {
     }
 
     return {
-      entries, delta_link: delta.delta_link,
-      stored, deduplicated, attachments_stored: att_stored, folder_processed,
+      entries,
+      delta_link: delta.delta_link,
+      stored,
+      deduplicated,
+      attachments_stored: att_stored,
+      folder_processed,
     };
   }
 
