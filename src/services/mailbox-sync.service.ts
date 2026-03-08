@@ -11,8 +11,8 @@ import type { Snapshot } from '@/domain/snapshot';
 import { SnapshotStatus } from '@/domain/snapshot';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
 import { fetch_and_store_attachments } from '@/services/attachment-sync.helper';
-import type { FolderProgress } from '@/services/sync-progress.helper';
-import { emit_progress, emit_paging_progress } from '@/services/sync-progress.helper';
+import { calc_rate } from '@/services/sync-progress.helper';
+import { BackupDashboard } from '@/services/backup-dashboard';
 import { logger } from '@/utils/logger';
 
 export interface SyncResult {
@@ -65,55 +65,52 @@ export class MailboxSyncService {
     const folders = this.apply_folder_filter(all_folders, options.folder_filter);
     const global_total = folders.reduce((sum, f) => sum + f.total_item_count, 0);
     logger.info(`${folders.length} folders, ~${global_total} items`);
+
+    const dashboard = new BackupDashboard(
+      folders.map((f) => ({ name: f.display_name, total_items: f.total_item_count })),
+    );
+
     const all_entries: ManifestEntry[] = [];
     const new_delta_links: Record<string, string> = {};
     let global_processed = 0, stored = 0, deduplicated = 0, attachments_stored = 0;
     const folder_errors: string[] = [];
     const sync_start = Date.now();
 
-    let folder_index = 0;
-    for (const folder of folders) {
-      const progress: FolderProgress = {
-        folder_name: folder.display_name,
-        folder_index,
-        folder_count: folders.length,
-        folder_total_items: folder.total_item_count,
-        folder_processed: 0,
-        global_total_items: global_total,
-        global_processed,
-        started_at: sync_start,
-        folder_started_at: Date.now(),
-        att_suffix: '',
-      };
+    for (let i = 0; i < folders.length; i++) {
+      const folder = folders[i]!;
+      dashboard.mark_active(i);
 
+      let f_stored = 0, f_deduped = 0, f_att = 0;
       try {
         const prev_link = saved_links[folder.folder_id];
         const result = await this.sync_single_folder(
-          ctx,
-          tenant_id,
-          mailbox_id,
-          folder.folder_id,
-          progress,
-          prev_link,
-          previous_entry_count,
+          ctx, tenant_id, mailbox_id, folder.folder_id, i,
+          folder.total_item_count, global_total, global_processed, sync_start,
+          dashboard, prev_link, previous_entry_count,
         );
         all_entries.push(...result.entries);
         new_delta_links[folder.folder_id] = result.delta_link;
-        stored += result.stored;
-        deduplicated += result.deduplicated;
-        attachments_stored += result.attachments_stored;
-        global_processed += progress.folder_processed;
+        f_stored = result.stored;
+        f_deduped = result.deduplicated;
+        f_att = result.attachments_stored;
+        stored += f_stored;
+        deduplicated += f_deduped;
+        attachments_stored += f_att;
+        global_processed += result.folder_processed;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         folder_errors.push(`${folder.display_name}: ${msg}`);
-        global_processed += progress.folder_processed;
+        dashboard.mark_error(i, msg);
+        continue;
       }
 
-      folder_index++;
+      const rate = calc_rate(global_processed, Date.now() - sync_start);
+      const eta = rate > 0 ? (global_total - global_processed) / rate : 0;
+      dashboard.update_total(global_processed, global_total, rate, eta);
+      dashboard.mark_done(i, f_stored, f_deduped, f_att);
     }
 
-    logger.progress_done();
-
+    dashboard.finish(global_processed);
     if (folder_errors.length > 0) {
       for (const e of folder_errors) logger.warn(e);
     }
@@ -127,7 +124,9 @@ export class MailboxSyncService {
         `-- ${elapsed_s}s`,
     );
 
-    const manifest = this.build_manifest(mailbox_id, snapshot.id, all_entries, new_delta_links);
+    const manifest = this.build_manifest(
+      mailbox_id, snapshot.id, all_entries, new_delta_links, previous_entry_count,
+    );
     await this._manifests.save(ctx, manifest);
     const completed = this.mark_snapshot_completed(snapshot, all_entries.length);
     return { snapshot: completed, manifest };
@@ -154,13 +153,18 @@ export class MailboxSyncService {
     return matched;
   }
 
-  /** Runs a delta sync for one folder with live progress updates. */
+  /** Runs a delta sync for one folder, driving the dashboard for live progress. */
   private async sync_single_folder(
     ctx: TenantContext,
     tenant_id: string,
     mailbox_id: string,
     folder_id: string,
-    progress: FolderProgress,
+    folder_index: number,
+    folder_total: number,
+    global_total: number,
+    global_processed_before: number,
+    sync_start: number,
+    dashboard: BackupDashboard,
     prev_delta_link?: string,
     previous_manifest_entries = 0,
   ): Promise<{
@@ -169,40 +173,31 @@ export class MailboxSyncService {
     stored: number;
     deduplicated: number;
     attachments_stored: number;
+    folder_processed: number;
   }> {
-    const label = `${progress.folder_name} [${progress.folder_index + 1}/${progress.folder_count}]`;
+    const page_start = Date.now();
 
     const on_page = (_page: number, items: number): void => {
-      emit_paging_progress(progress, label, items);
+      const elapsed_ms = Date.now() - page_start;
+      const page_rate = calc_rate(items, elapsed_ms);
+      const remaining = global_total - global_processed_before - items;
+      const eta = page_rate > 0 ? remaining / page_rate : 0;
+      dashboard.update_paging(folder_index, items, page_rate, eta);
+      dashboard.update_total(global_processed_before, global_total, page_rate, eta);
     };
 
     let delta = await this._connector.fetch_delta(
-      tenant_id,
-      mailbox_id,
-      folder_id,
-      prev_delta_link,
-      on_page,
+      tenant_id, mailbox_id, folder_id, prev_delta_link, on_page,
     );
 
-    const is_stale_delta =
-      prev_delta_link &&
-      delta.messages.length === 0 &&
-      progress.folder_total_items > 0 &&
-      previous_manifest_entries === 0;
-
-    if (is_stale_delta) {
-      logger.progress(`${label} -- stale delta, retrying full sync`);
+    if (prev_delta_link && delta.messages.length === 0 && folder_total > 0 && previous_manifest_entries === 0) {
       delta = await this._connector.fetch_delta(
-        tenant_id,
-        mailbox_id,
-        folder_id,
-        undefined,
-        on_page,
+        tenant_id, mailbox_id, folder_id, undefined, on_page,
       );
     }
 
     const entries: ManifestEntry[] = [];
-    let stored = 0, deduplicated = 0, att_stored = 0;
+    let stored = 0, deduplicated = 0, att_stored = 0, folder_processed = 0;
 
     for (const message of delta.messages) {
       const entry = await this.store_single_message(ctx, message, mailbox_id);
@@ -211,20 +206,11 @@ export class MailboxSyncService {
 
       const attachment_entries = message.has_attachments
         ? await fetch_and_store_attachments(
-            ctx,
-            this._connector,
-            tenant_id,
-            mailbox_id,
-            message.message_id,
-            (done, total) => {
-              progress.att_suffix = ` | att ${done}/${total}`;
-              emit_progress(progress, label);
-            },
+            ctx, this._connector, tenant_id, mailbox_id, message.message_id,
           )
         : undefined;
 
       if (attachment_entries) att_stored += attachment_entries.length;
-      progress.att_suffix = '';
 
       entries.push(
         attachment_entries && attachment_entries.length > 0
@@ -232,21 +218,17 @@ export class MailboxSyncService {
           : entry.manifest_entry,
       );
 
-      progress.folder_processed++;
-      progress.global_processed++;
-      emit_progress(progress, label);
-    }
-
-    if (delta.messages.length === 0) {
-      logger.progress(`${label} -- up to date`);
+      folder_processed++;
+      const gp = global_processed_before + folder_processed;
+      const rate = calc_rate(gp, Date.now() - sync_start);
+      const eta = rate > 0 ? (global_total - gp) / rate : 0;
+      dashboard.update_active(folder_index, folder_processed, rate, eta);
+      dashboard.update_total(gp, global_total, rate, eta);
     }
 
     return {
-      entries,
-      delta_link: delta.delta_link,
-      stored,
-      deduplicated,
-      attachments_stored: att_stored,
+      entries, delta_link: delta.delta_link,
+      stored, deduplicated, attachments_stored: att_stored, folder_processed,
     };
   }
 
@@ -290,12 +272,17 @@ export class MailboxSyncService {
     };
   }
 
-  /** Assembles a complete manifest from the stored entries, including attachment sizes. */
+  /**
+   * Assembles a complete manifest. When the current sync found no new entries,
+   * carries forward the prior backup's total_objects so the stale-delta
+   * safeguard does not mistake an unchanged mailbox for a never-backed-up one.
+   */
   private build_manifest(
     mailbox_id: string,
     snapshot_id: string,
     entries: ManifestEntry[],
     delta_links: Record<string, string>,
+    previous_total_objects = 0,
   ): Manifest {
     const total_size_bytes = entries.reduce((sum, e) => {
       const att_size = e.attachments?.reduce((a, att) => a + att.size_bytes, 0) ?? 0;
@@ -307,7 +294,7 @@ export class MailboxSyncService {
       mailbox_id,
       snapshot_id,
       created_at: new Date(),
-      total_objects: entries.length,
+      total_objects: Math.max(entries.length, previous_total_objects),
       total_size_bytes,
       delta_links,
       entries,
