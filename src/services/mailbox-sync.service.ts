@@ -303,6 +303,7 @@ export class MailboxSyncService {
       checksum,
       size_bytes: message.size_bytes,
       subject: message.subject,
+      folder_id: message.folder_id,
     };
 
     return { manifest_entry, was_new: !already_stored };

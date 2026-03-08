@@ -1,14 +1,18 @@
 # m365-atlas
 
-An open-source CLI backup engine for Microsoft 365 mailboxes, designed with per-tenant encryption, content-addressed storage, and efficient delta synchronization for scalable, secure backups.
+An open-source CLI backup and restore engine for Microsoft 365 mailboxes. Built with per-tenant envelope encryption, content-addressed deduplication, multi-layer integrity validation, and efficient delta synchronization for scalable, secure operations against S3-compatible object storage.
 
 ## Highlights
 
-- **Per-tenant envelope encryption** -- each tenant gets its own AES-256-GCM data encryption key (DEK), derived and wrapped via scrypt. A database breach exposes only encrypted blobs; each tenant's data requires its own master passphrase to decrypt. Most backup tools encrypt at the volume level or not at all.
+- **Per-tenant envelope encryption** -- each tenant gets its own AES-256-GCM data encryption key (DEK), derived and wrapped via scrypt. A storage breach exposes only encrypted blobs; each tenant's data requires its own master passphrase to decrypt. Most backup tools encrypt at the volume level or not at all.
 - **Content-addressed deduplication** -- messages and attachments are stored under `SHA-256(plaintext)` keys, scoped per-mailbox. Identical content across folders or backup runs within a mailbox is stored once. The same PDF attached to 50 emails is stored once. Dedup happens before encryption, so ciphertext variance doesn't defeat it.
-- **Attachment backup** -- file attachments are fetched via the Graph API, deduplicated independently of their parent message, and stored encrypted alongside message data. Attachments larger than ~4 MB that Graph cannot inline are recorded as metadata-only (name, MIME type, size) with a warning.
+- **Attachment backup and restore** -- file attachments are fetched via the Graph API, deduplicated independently of their parent message, and stored encrypted alongside message data. Large attachments (>3 MB) use Graph upload sessions with chunked transfer during restore. Attachments over ~4 MB that Graph cannot inline during backup are recorded as metadata-only with a warning.
+- **Full restore with original timestamps** -- restored messages retain their original `receivedDateTime` and `sentDateTime` via MAPI extended properties, appear as received mail (not drafts), and are placed into a timestamped `Restore-<date>` folder preserving the original subfolder structure. Supports snapshot-level, folder-level, single-message, and cross-mailbox restores.
 - **Multi-layer integrity** -- plaintext SHA-256 checksums in the manifest, `Content-MD5` on every S3 PUT for transport verification, and AES-GCM authentication tags for at-rest tamper detection. `atlas verify` re-derives all three.
 - **Delta sync with stale-delta safeguard** -- uses Microsoft Graph delta queries for incremental backups. Detects interrupted prior runs (saved delta link + zero manifest entries) and automatically falls back to full enumeration. `--full` flag available to force it.
+- **Graceful interruption** -- Ctrl+C during a backup saves a partial manifest with already-stored objects and merges delta links so the next run resumes where it left off rather than starting over.
+- **Real-time progress dashboard** -- multi-line ANSI dashboard during backup and restore shows all folders simultaneously with per-folder and global ETA, items/s rate, and distinct states for active, completed, empty, synced (delta), and interrupted folders.
+- **Data protection by default** -- email subjects are hidden in `atlas list` output unless explicitly revealed with `-S`, preventing accidental exposure of confidential information during admin operations.
 - **Hexagonal architecture** -- ports-and-adapters with Inversify DI. Swap the storage backend or mail connector without touching business logic. Every service is independently testable.
 - **TypeScript / Node.js** -- installable via npm, no compiled binary distribution needed. Runs anywhere Node 20+ does.
 
@@ -33,14 +37,14 @@ graph LR
 src/
 ├── adapters/
 │   ├── keystore/          # envelope encryption (AES-256-GCM, scrypt KEK)
-│   ├── m365/              # Microsoft Graph connector (delta sync, OAuth2)
+│   ├── m365/              # Microsoft Graph connector (delta sync, OAuth2, restore)
 │   ├── storage-s3/        # S3 object storage, manifest repo, bucket manager
 │   └── tenant-context.factory.ts
 ├── cli/
 │   └── commands/          # backup, list, read, verify, restore, delete
 ├── domain/                # Manifest, Snapshot, Tenant, BackupObject (pure data)
-├── ports/                 # ObjectStorage, MailboxConnector, ManifestRepository, KeyService
-├── services/              # MailboxSyncService, CatalogService, DeletionService, etc.
+├── ports/                 # ObjectStorage, MailboxConnector, RestoreConnector, ManifestRepository, KeyService
+├── services/              # MailboxSyncService, RestoreService, CatalogService, DeletionService, helpers
 └── utils/                 # config loader, logger
 ```
 
@@ -59,6 +63,12 @@ cp .env.example .env
 
 # first backup
 atlas backup --mailbox user@company.com
+
+# list what was backed up
+atlas list
+
+# restore a folder from backup
+atlas restore -m user@company.com -f Inbox
 ```
 
 ## Configuration
@@ -87,8 +97,11 @@ Register an application in Azure Portal with these **Application** permissions (
 | Permission | Why |
 |---|---|
 | `Mail.Read` | Read mailbox contents via Graph API |
+| `Mail.ReadWrite` | Restore messages and create folders in target mailboxes |
 | `User.Read.All` | Enumerate users / resolve mailbox IDs |
 | `MailboxSettings.Read` | Read mailbox metadata and folder structure |
+
+> `Mail.ReadWrite` is only required for `atlas restore`. Backup, list, and read operations work with `Mail.Read` alone.
 
 After adding permissions, click **Grant admin consent for [your tenant]** in the API Permissions blade. The app authenticates using OAuth2 Client Credentials flow (`@azure/identity` `ClientSecretCredential`).
 
@@ -96,10 +109,10 @@ After adding permissions, click **Grant admin consent for [your tenant]** in the
 
 ### `atlas backup`
 
-Back up mailboxes from M365 tenant to object storage.
+Back up mailboxes from M365 tenant to object storage. Displays a real-time multi-line dashboard showing all folders with per-folder and global ETA. Ctrl+C saves partial progress so the next run resumes from where it stopped.
 
 ```bash
-atlas backup --mailbox user@company.com              # single mailbox
+atlas backup --mailbox user@company.com              # incremental backup
 atlas backup --mailbox user@company.com --full        # force full sync (ignore delta state)
 atlas backup --mailbox user@company.com -f Inbox Sent # specific folders only
 atlas backup -t <tenant-id> -m user@company.com       # explicit tenant
@@ -114,13 +127,14 @@ atlas backup -t <tenant-id> -m user@company.com       # explicit tenant
 
 ### `atlas list`
 
-Browse backed-up data at three zoom levels.
+Browse backed-up data at three zoom levels. Subjects are hidden by default for data protection.
 
 ```bash
-atlas list                          # all mailboxes with summary stats
-atlas list -m user@company.com      # all snapshots for a mailbox
-atlas list -s <snapshot-id>         # messages inside a snapshot (first 50)
-atlas list -s <snapshot-id> --all   # all messages
+atlas list                              # all mailboxes with summary stats
+atlas list -m user@company.com          # all snapshots for a mailbox
+atlas list -s <snapshot-id>             # messages inside a snapshot (first 50)
+atlas list -s <snapshot-id> --all       # all messages
+atlas list -s <snapshot-id> -S          # reveal email subjects
 ```
 
 | Option | Description |
@@ -128,21 +142,22 @@ atlas list -s <snapshot-id> --all   # all messages
 | `-m, --mailbox <email>` | Show snapshots for this mailbox |
 | `-s, --snapshot <id>` | Show messages inside this snapshot |
 | `--all` | Show all messages (default caps at 50) |
+| `-S, --subjects` | Reveal email subjects (hidden by default for data protection) |
 | `-t, --tenant <id>` | Override tenant ID |
 
 ### `atlas read`
 
-Decrypt and display a single backed-up message. If the message has attachments, their metadata (name, MIME type, size) is listed below the body. Attachment content is not downloaded or displayed -- use the storage key from `--raw` output to retrieve the encrypted binary directly if needed.
+Decrypt and display a single backed-up message. Messages are referenced by their `#` index from `atlas list` output. If the message has attachments, their metadata (name, MIME type, size) is listed below the body.
 
 ```bash
-atlas read -s <snapshot-id> --message <message-id>        # formatted view
-atlas read -s <snapshot-id> --message <message-id> --raw   # full JSON
+atlas read -s <snapshot-id> --message 34        # formatted view (by index)
+atlas read -s <snapshot-id> --message 34 --raw  # full JSON
 ```
 
 | Option | Description |
 |---|---|
 | `-s, --snapshot <id>` | Snapshot containing the message |
-| `--message <id>` | Graph API message ID |
+| `--message <ref>` | Message `#` from `atlas list`, or full Graph message ID |
 | `--raw` | Output full JSON blob instead of formatted headers + body |
 | `-t, --tenant <id>` | Override tenant ID |
 
@@ -156,12 +171,42 @@ atlas verify -s <snapshot-id>
 
 ### `atlas restore`
 
-> **Work in progress.** The restore command currently decrypts and validates all objects in a snapshot but does not yet push messages back to a mailbox via Graph API.
+Restore emails from backup to an M365 mailbox. Two modes of operation:
+
+**Snapshot mode** -- restore from a specific snapshot:
 
 ```bash
-atlas restore -s <snapshot-id>
-atlas restore -s <snapshot-id> -m target@company.com   # restore to different mailbox
+atlas restore -s <snapshot-id>                          # full snapshot to original mailbox
+atlas restore -s <snapshot-id> -f Inbox                 # restore one folder only
+atlas restore -s <snapshot-id> --message 42             # restore a single message by index
+atlas restore -s <snapshot-id> -m target@company.com    # restore to a different mailbox
 ```
+
+**Mailbox mode** -- aggregate all snapshots for a mailbox, deduplicate, and restore:
+
+```bash
+atlas restore -m user@company.com                                    # full mailbox restore
+atlas restore -m user@company.com -f Inbox                           # only the Inbox folder
+atlas restore -m user@company.com --start-date 2026-01-01            # from Jan 1 onward
+atlas restore -m user@company.com --start-date 2026-01-01 --end-date 2026-06-30  # date range
+atlas restore -m user@company.com -T other@company.com               # cross-mailbox restore
+atlas restore -m user@company.com -T other@company.com -f Inbox      # cross-mailbox + folder
+```
+
+| Option | Description |
+|---|---|
+| `-s, --snapshot <id>` | Restore from a specific snapshot |
+| `-m, --mailbox <email>` | Restore from all snapshots for this mailbox |
+| `-T, --target <email>` | Target mailbox for cross-mailbox restore (defaults to source) |
+| `-f, --folder <name>` | Restore only messages from this folder |
+| `--message <ref>` | Restore a single message by `#` index from `atlas list` |
+| `--start-date <YYYY-MM-DD>` | Include snapshots created on or after this date |
+| `--end-date <YYYY-MM-DD>` | Include snapshots created on or before this date |
+| `-t, --tenant <id>` | Override tenant ID |
+
+Either `--snapshot` or `--mailbox` is required. When using mailbox mode, entries are deduplicated across snapshots (newest version of each message wins). Cross-mailbox restores preserve the original folder names from the source mailbox.
+
+Restored messages retain their original received/sent timestamps, appear as received mail (not drafts), and include all backed-up attachments. Large attachments (>3 MB) use Graph upload sessions with chunked transfer. A multi-line dashboard shows restore progress with per-folder status and ETA.
 
 ### `atlas delete`
 
@@ -176,7 +221,7 @@ atlas delete --purge -y                 # skip confirmation prompt
 
 | Option | Description |
 |---|---|
-| `-m, --mailbox <email>` | Delete all data and manifests for a mailbox |
+| `-m, --mailbox <email>` | Delete all data, attachments, and manifests for a mailbox |
 | `-s, --snapshot <id>` | Delete a single snapshot manifest |
 | `--purge` | Delete all data, manifests, and encryption keys (irreversible) |
 | `-y, --yes` | Skip confirmation prompt |
@@ -202,6 +247,7 @@ DEK encrypts all data + manifests for that tenant
 - **KEK** (Key Encryption Key) -- derived deterministically from the passphrase and tenant ID. Never stored; re-derived on every run.
 - **DEK** (Data Encryption Key) -- random 256-bit key, generated once per tenant and stored wrapped (encrypted with KEK) at `_meta/dek.enc` in the tenant's S3 bucket.
 - **Ciphertext format** -- `[12-byte IV][16-byte GCM auth tag][ciphertext]`. Every encrypt operation uses a fresh random IV.
+- **Manifest encryption** -- manifests (containing email subjects and message metadata) are encrypted with the same DEK, ensuring subject lines and folder names are never exposed at rest.
 
 Integrity is validated at three layers:
 
@@ -216,11 +262,25 @@ Integrity is validated at three layers:
 Backups use Microsoft Graph [delta queries](https://learn.microsoft.com/en-us/graph/delta-query-messages) for incremental sync:
 
 1. **Initial run** -- requests `/users/{id}/mailFolders/{id}/messages/delta` with `$select` including `body`. The API returns all messages across paginated responses. The final `@odata.deltaLink` is saved in the manifest.
-2. **Subsequent runs** -- sends the saved `deltaLink`. The API returns only messages created, modified, or deleted since the last sync.
+2. **Subsequent runs** -- sends the saved `deltaLink`. The API returns only messages created, modified, or deleted since the last sync. Folders with no changes show as "synced" (yellow `[==]` in the dashboard).
 3. **Stale-delta safeguard** -- if a saved delta link returns 0 items but the previous manifest had 0 entries (indicating an interrupted prior backup), Atlas discards the link and runs a full enumeration automatically.
 4. **Force full** -- `atlas backup --full` ignores all saved delta links.
+5. **Graceful interruption** -- Ctrl+C during a backup sets an interrupt flag, saves all already-stored objects and completed delta links into a partial manifest, and marks interrupted folders in the dashboard. The next incremental run picks up from the completed state.
 
-Message bodies are fetched inline via the delta `$select` parameter, avoiding per-message API calls. The Graph SDK's built-in retry middleware handles 429 (throttle) and 5xx responses.
+Message bodies are fetched inline via the delta `$select` parameter, avoiding per-message API calls. Transient Graph API errors (429, 503, 504) are retried with exponential backoff.
+
+## Restore architecture
+
+The restore flow reads encrypted data from S3, decrypts it, and pushes it back to the target mailbox via the Microsoft Graph API:
+
+1. Load manifest(s) -- either a single snapshot or all snapshots for a mailbox (deduplicated by `object_id`, newest wins)
+2. Optionally filter by date range (`--start-date` / `--end-date`) and folder name
+3. Create a `Restore-<timestamp>` root folder in the target mailbox
+4. Recreate the original folder structure as subfolders under the restore root
+5. For each message: decrypt from S3, strip Graph read-only fields, set MAPI extended properties for original timestamps, create via Graph API
+6. For each attachment: decrypt from S3, upload inline (< 3 MB) or via upload session (>= 3 MB)
+
+Cross-mailbox restores (`-T` flag) look up folder names from the **source** mailbox and create them in the **target** mailbox, preserving the original folder names regardless of the target's locale.
 
 ## Storage layout
 
@@ -245,8 +305,8 @@ atlas-{tenant_id}/
         └── {snapshot_id_2}.json
 ```
 
-- **Content-addressed keys** -- `data/{mailbox}/{SHA-256 of plaintext}` for messages, `attachments/{mailbox}/{SHA-256}` for file attachments. Deduplication is per-mailbox; identical content across snapshots of the same mailbox is stored once.
-- **Manifests** -- JSON containing snapshot metadata, per-message checksums, sizes, storage keys, attachment metadata, and delta links for the next incremental sync.
+- **Content-addressed keys** -- `data/{mailbox}/{SHA-256 of plaintext}` for messages, `attachments/{mailbox}/{SHA-256}` for file attachments. Deduplication is performed per-mailbox using content-addressed storage. Identical messages across snapshots are stored once.
+- **Manifests** -- encrypted JSON containing snapshot metadata, per-message checksums, sizes, storage keys, folder IDs, attachment metadata, and delta links for the next incremental sync.
 
 ## Development
 
@@ -268,6 +328,10 @@ pnpm run format         # prettier
 | `PascalCase` types, classes, interfaces | `@typescript-eslint/naming-convention` |
 | Max 300 lines per file (excluding blanks/comments) | `max-lines` ESLint rule |
 | Single quotes, trailing commas, 100-char print width | Prettier |
+| `@/` path aliases (no relative imports) | `tsconfig.json` paths |
+| JSDoc on all exported functions | Convention |
+
+When a file approaches 300 lines, the logic should be split into smaller helper files rather than compacted. Each function name should describe exactly what it does without hidden side-effects; multi-responsibility functions are split into a parent that calls focused child functions.
 
 ### Testing
 
@@ -275,7 +339,7 @@ Tests use Vitest with `@vitest/coverage-v8`. Services are tested via Inversify c
 
 ## License
 
-Copyright © 2026 Miika Oja-Kaukola
+Copyright 2026 Miika Oja-Kaukola
 
 This project is licensed under the Apache License, Version 2.0.  
 See the [LICENSE](./LICENSE) file for details.

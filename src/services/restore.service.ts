@@ -1,87 +1,300 @@
 import { inject, injectable } from 'inversify';
-import type { TenantContextFactory } from '@/ports/tenant-context.port';
+import chalk from 'chalk';
+import type { TenantContextFactory, TenantContext } from '@/ports/tenant-context.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import type { TenantContext } from '@/ports/tenant-context.port';
 import type { ManifestRepository } from '@/ports/manifest-repository.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
+import type { MailboxConnector } from '@/ports/mailbox-connector.port';
+import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
+import type { RestoreConnector } from '@/ports/restore-connector.port';
+import { RESTORE_CONNECTOR_TOKEN } from '@/ports/restore-connector.port';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
+import {
+  build_folder_map,
+  create_restore_root,
+  ensure_subfolder,
+  group_entries_by_folder,
+  filter_entries_by_folder_name,
+  count_unique_folders,
+} from '@/services/restore-folder.helper';
+import {
+  filter_manifests_by_date,
+  merge_snapshot_entries,
+} from '@/services/restore-merge.helper';
+import {
+  restore_single_message,
+  restore_folder_entries,
+  backfill_missing_folder_ids,
+  log_restore_summary,
+} from '@/services/restore-execution.helper';
+import { RestoreDashboard } from '@/services/restore-dashboard';
+import { calc_rate } from '@/services/sync-progress.helper';
+import { logger } from '@/utils/logger';
 
 export interface RestoreResult {
   readonly snapshot_id: string;
   readonly restored_count: number;
+  readonly attachment_count: number;
+  readonly error_count: number;
   readonly errors: string[];
+  readonly restore_folder_name: string;
+}
+
+export interface RestoreOptions {
+  readonly folder_name?: string;
+  readonly message_ref?: string;
+  readonly target_mailbox?: string;
+  readonly start_date?: Date;
+  readonly end_date?: Date;
 }
 
 @injectable()
 export class RestoreService {
+  private _interrupted = false;
+
   constructor(
     @inject(TENANT_CONTEXT_FACTORY_TOKEN) private readonly _tenant_factory: TenantContextFactory,
     @inject(MANIFEST_REPOSITORY_TOKEN) private readonly _manifests: ManifestRepository,
+    @inject(MAILBOX_CONNECTOR_TOKEN) private readonly _connector: MailboxConnector,
+    @inject(RESTORE_CONNECTOR_TOKEN) private readonly _restore_connector: RestoreConnector,
   ) {}
 
   /**
-   * Restores all messages from a backup snapshot by fetching
-   * each encrypted object, decrypting it, and (eventually) pushing to a mailbox.
+   * Restores messages from a snapshot back to the mailbox via Graph API.
+   * Supports full snapshot, single folder, or single message scope.
    */
   async restore_snapshot(
     tenant_id: string,
     snapshot_id: string,
-    _target_mailbox_id?: string,
+    options: RestoreOptions = {},
   ): Promise<RestoreResult> {
     const ctx = await this._tenant_factory.create(tenant_id);
-    const manifest = await this.load_manifest_for_snapshot(ctx, snapshot_id);
-    const { restored_count, errors } = await this.restore_all_entries(ctx, manifest.entries);
-    return { snapshot_id, restored_count, errors };
-  }
+    const manifest = await this.load_manifest(ctx, snapshot_id);
+    const source_mailbox = manifest.mailbox_id;
+    const target_mailbox = options.target_mailbox?.toLowerCase() ?? source_mailbox;
 
-  /** Loads the manifest for a snapshot, throwing if none exists. */
-  private async load_manifest_for_snapshot(
-    ctx: TenantContext,
-    snapshot_id: string,
-  ): Promise<Manifest> {
-    const manifest = await this._manifests.find_by_snapshot(ctx, snapshot_id);
-    if (!manifest) {
-      throw new Error(`No manifest found for snapshot ${snapshot_id}`);
-    }
-    return manifest;
-  }
-
-  /** Attempts to restore every entry, collecting errors without aborting. */
-  private async restore_all_entries(
-    ctx: TenantContext,
-    entries: ManifestEntry[],
-  ): Promise<{ restored_count: number; errors: string[] }> {
-    const errors: string[] = [];
-    let restored_count = 0;
-
-    for (const entry of entries) {
-      const error = await this.restore_single_entry(ctx, entry);
-      if (error) {
-        errors.push(error);
-      } else {
-        restored_count++;
-      }
+    const entries = await this.resolve_entries(ctx, manifest, source_mailbox, tenant_id, options);
+    if (entries.length === 0) {
+      logger.warn('No entries to restore');
+      return this.empty_result(snapshot_id);
     }
 
-    return { restored_count, errors };
+    if (options.message_ref) {
+      return restore_single_message(
+        ctx, this._connector, this._restore_connector,
+        tenant_id, source_mailbox, target_mailbox, snapshot_id, entries[0]!,
+      );
+    }
+
+    return this.restore_batch(ctx, tenant_id, source_mailbox, target_mailbox, snapshot_id, entries);
   }
 
   /**
-   * Fetches and decrypts a single entry from storage.
-   * Returns an error string on failure, or null on success.
+   * Restores messages from all snapshots for a mailbox, merging and
+   * deduplicating entries. Supports date range filtering and folder filter.
    */
-  private async restore_single_entry(
-    ctx: TenantContext,
-    entry: ManifestEntry,
-  ): Promise<string | null> {
-    try {
-      const ciphertext = await ctx.storage.get(entry.storage_key);
-      ctx.decrypt(ciphertext);
-      // TODO: push decrypted message back to mailbox via connector
-      return null;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return `${entry.object_id}: ${message}`;
+  async restore_mailbox(
+    tenant_id: string,
+    mailbox_id: string,
+    options: RestoreOptions = {},
+  ): Promise<RestoreResult> {
+    const ctx = await this._tenant_factory.create(tenant_id);
+    const target = options.target_mailbox?.toLowerCase() ?? mailbox_id;
+
+    const manifests = await this.load_mailbox_manifests(ctx, mailbox_id, options);
+    if (manifests.length === 0) {
+      logger.warn('No snapshots found for this mailbox in the given date range');
+      return this.empty_result('mailbox');
     }
+
+    const entries = merge_snapshot_entries(manifests);
+
+    if (options.folder_name) {
+      await backfill_missing_folder_ids(ctx, entries);
+    }
+
+    const filtered = await this.apply_entry_filters(entries, mailbox_id, tenant_id, options);
+
+    if (filtered.length === 0) {
+      logger.warn('No entries to restore after filtering');
+      return this.empty_result('mailbox');
+    }
+
+    logger.info(
+      `Aggregated ${chalk.cyan(String(manifests.length))} snapshots -- ` +
+        `${chalk.cyan(String(filtered.length))} unique messages`,
+    );
+
+    return this.restore_batch(ctx, tenant_id, mailbox_id, target, 'mailbox', filtered);
+  }
+
+  /** Loads all manifests for a mailbox, sorted newest-first and date-filtered. */
+  private async load_mailbox_manifests(
+    ctx: TenantContext,
+    mailbox_id: string,
+    options: RestoreOptions,
+  ): Promise<Manifest[]> {
+    const all = await this._manifests.list_all_manifests(ctx);
+    const for_mailbox = all
+      .filter((m) => m.mailbox_id === mailbox_id)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    return filter_manifests_by_date(for_mailbox, options.start_date, options.end_date);
+  }
+
+  /** Applies folder filter to a set of entries. */
+  private async apply_entry_filters(
+    entries: ManifestEntry[],
+    mailbox_id: string,
+    tenant_id: string,
+    options: RestoreOptions,
+  ): Promise<ManifestEntry[]> {
+    if (options.folder_name) {
+      const folder_map = await build_folder_map(this._connector, tenant_id, mailbox_id);
+      return filter_entries_by_folder_name(entries, options.folder_name, folder_map);
+    }
+    return entries;
+  }
+
+  /** Loads and validates the manifest for a given snapshot. */
+  private async load_manifest(ctx: TenantContext, snapshot_id: string): Promise<Manifest> {
+    const manifest = await this._manifests.find_by_snapshot(ctx, snapshot_id);
+    if (!manifest) throw new Error(`No manifest found for snapshot ${snapshot_id}`);
+    return manifest;
+  }
+
+  /** Determines which entries to restore based on options. */
+  private async resolve_entries(
+    ctx: TenantContext,
+    manifest: Manifest,
+    mailbox_id: string,
+    tenant_id: string,
+    options: RestoreOptions,
+  ): Promise<ManifestEntry[]> {
+    if (options.message_ref) {
+      const entry = this.resolve_single_entry(manifest, options.message_ref);
+      return entry ? [entry] : [];
+    }
+
+    if (options.folder_name) {
+      await backfill_missing_folder_ids(ctx, manifest.entries);
+      const folder_map = await build_folder_map(this._connector, tenant_id, mailbox_id);
+      return filter_entries_by_folder_name(manifest.entries, options.folder_name, folder_map);
+    }
+
+    return manifest.entries;
+  }
+
+  /** Resolves a single entry by 1-based index or object_id. */
+  private resolve_single_entry(manifest: Manifest, ref: string): ManifestEntry | undefined {
+    const index = Number(ref);
+    if (Number.isInteger(index) && index >= 1) return manifest.entries[index - 1];
+    return manifest.entries.find((e) => e.object_id === ref);
+  }
+
+  /** Restores a batch of messages with dashboard progress. */
+  private async restore_batch(
+    ctx: TenantContext,
+    tenant_id: string,
+    source_mailbox: string,
+    target_mailbox: string,
+    snapshot_id: string,
+    entries: ManifestEntry[],
+  ): Promise<RestoreResult> {
+    const folder_map = await build_folder_map(this._connector, tenant_id, source_mailbox);
+    await backfill_missing_folder_ids(ctx, entries);
+
+    const groups = group_entries_by_folder(entries);
+    const root = await create_restore_root(this._restore_connector, tenant_id, target_mailbox);
+    const created_folders = new Map<string, string>();
+
+    logger.info(
+      `Restoring ${entries.length} messages across ` +
+        `${count_unique_folders(entries)} folders into ${root.display_name}`,
+    );
+
+    const dashboard = new RestoreDashboard(
+      [...groups.entries()].map(([fid, items]) => ({
+        name: folder_map.get(fid) ?? fid.slice(0, 12),
+        total_items: items.length,
+      })),
+    );
+
+    return this.execute_restore_loop(
+      ctx, tenant_id, target_mailbox, snapshot_id, root, groups,
+      folder_map, created_folders, dashboard,
+    );
+  }
+
+  /** Main restore loop: iterates folders then messages with dashboard updates. */
+  private async execute_restore_loop(
+    ctx: TenantContext,
+    tenant_id: string,
+    target_mailbox: string,
+    snapshot_id: string,
+    root: { folder_id: string; display_name: string },
+    groups: Map<string, ManifestEntry[]>,
+    folder_map: Map<string, string>,
+    created_folders: Map<string, string>,
+    dashboard: RestoreDashboard,
+  ): Promise<RestoreResult> {
+    let global_restored = 0, global_att = 0, global_errors = 0;
+    const all_errors: string[] = [];
+    const start = Date.now();
+    const global_total = [...groups.values()].reduce((s, g) => s + g.length, 0);
+
+    this._interrupted = false;
+    const on_sigint = (): void => { this._interrupted = true; };
+    process.on('SIGINT', on_sigint);
+
+    try {
+      let folder_index = 0;
+      for (const [fid, folder_items] of groups) {
+        if (this._interrupted) break;
+        dashboard.mark_active(folder_index);
+
+        const target_fid = await ensure_subfolder(
+          this._restore_connector, tenant_id, target_mailbox,
+          root.folder_id, fid, folder_map, created_folders,
+        );
+
+        const result = await restore_folder_entries(
+          ctx, this._restore_connector, tenant_id, target_mailbox, target_fid,
+          folder_items, folder_index, global_restored, global_total, start, dashboard,
+          () => this._interrupted,
+        );
+
+        global_restored += result.restored;
+        global_att += result.attachments;
+        global_errors += result.errors.length;
+        all_errors.push(...result.errors);
+
+        const rate = calc_rate(global_restored, Date.now() - start);
+        const eta = rate > 0 ? (global_total - global_restored) / rate : 0;
+        dashboard.update_total(global_restored, global_total, rate, eta);
+
+        if (this._interrupted) break;
+        dashboard.mark_done(folder_index, result.restored, result.attachments);
+        folder_index++;
+      }
+
+      if (this._interrupted) dashboard.mark_all_pending_interrupted();
+      dashboard.finish(global_restored);
+      log_restore_summary(global_restored, global_att, global_errors, start);
+
+      return {
+        snapshot_id, restored_count: global_restored, attachment_count: global_att,
+        error_count: global_errors, errors: all_errors,
+        restore_folder_name: root.display_name,
+      };
+    } finally {
+      process.removeListener('SIGINT', on_sigint);
+    }
+  }
+  private empty_result(snapshot_id: string): RestoreResult {
+    return {
+      snapshot_id, restored_count: 0, attachment_count: 0,
+      error_count: 0, errors: [], restore_folder_name: '',
+    };
   }
 }

@@ -17,3 +17,6 @@ export { KEY_SERVICE_TOKEN } from './key-service.port';
 
 export type { TenantContext, TenantContextFactory } from './tenant-context.port';
 export { TENANT_CONTEXT_FACTORY_TOKEN } from './tenant-context.port';
+
+export type { RestoreConnector, AttachmentUpload, UploadSession } from './restore-connector.port';
+export { RESTORE_CONNECTOR_TOKEN } from './restore-connector.port';

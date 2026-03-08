@@ -1,3 +1,7 @@
+const RETRYABLE_STATUS_CODES = new Set([429, 503, 504]);
+const MAX_RETRIES = 4;
+const BASE_DELAY_MS = 1000;
+
 /**
  * Detects Graph errors that indicate an invalid/expired delta token.
  * Matches Corso's pattern: syncStateNotFound, resyncRequired, syncStateInvalid.
@@ -37,4 +41,43 @@ export function rethrow_if_access_denied(err: unknown): void {
     `then click "Grant admin consent".`;
 
   throw new Error(hint);
+}
+
+/** Returns true when the error carries a transient HTTP status (429, 503, 504). */
+export function is_transient_error(err: unknown): boolean {
+  const status = (err as Record<string, unknown>).statusCode;
+  return typeof status === 'number' && RETRYABLE_STATUS_CODES.has(status);
+}
+
+/**
+ * Wraps a Graph API call with exponential backoff retries for transient errors.
+ * Respects the Retry-After header from 429 responses when available.
+ */
+export async function with_graph_retry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!is_transient_error(err) || attempt === MAX_RETRIES) throw err;
+
+      const retry_after = extract_retry_after(err);
+      const delay = retry_after ?? BASE_DELAY_MS * 2 ** attempt;
+      await sleep(delay);
+    }
+  }
+
+  throw new Error('with_graph_retry: unreachable');
+}
+
+/** Extracts the Retry-After header value (in ms) from a Graph error, if present. */
+function extract_retry_after(err: unknown): number | undefined {
+  const headers = (err as Record<string, unknown>).headers as Record<string, string> | undefined;
+  const value = headers?.['retry-after'] ?? headers?.['Retry-After'];
+  if (!value) return undefined;
+  const seconds = parseInt(value, 10);
+  return isNaN(seconds) ? undefined : seconds * 1000;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -3,7 +3,9 @@ import { Container } from 'inversify';
 import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
+import { RESTORE_CONNECTOR_TOKEN } from '@/ports/restore-connector.port';
 import { GraphMailboxConnector } from '@/adapters/m365/graph-mailbox-connector.adapter';
+import { GraphRestoreConnector } from '@/adapters/m365/graph-restore-connector.adapter';
 import { create_graph_client, GRAPH_CLIENT_TOKEN } from '@/adapters/m365/graph-client.factory';
 import { create_s3_client, S3_CLIENT_TOKEN } from '@/adapters/storage-s3/s3-client.factory';
 import { S3ManifestRepository } from '@/adapters/storage-s3/s3-manifest-repository.adapter';
@@ -46,6 +48,7 @@ function bind_infrastructure(container: Container): void {
 /** Binds adapters to their port tokens. */
 function bind_adapters(container: Container): void {
   container.bind(MAILBOX_CONNECTOR_TOKEN).to(GraphMailboxConnector).inSingletonScope();
+  container.bind(RESTORE_CONNECTOR_TOKEN).to(GraphRestoreConnector).inSingletonScope();
   container.bind(TENANT_CONTEXT_FACTORY_TOKEN).to(DefaultTenantContextFactory).inSingletonScope();
   container.bind(MANIFEST_REPOSITORY_TOKEN).to(S3ManifestRepository).inSingletonScope();
 }
