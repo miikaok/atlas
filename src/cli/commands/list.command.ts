@@ -14,6 +14,7 @@ interface ListOptions {
   mailbox?: string;
   snapshot?: string;
   all?: boolean;
+  subjects?: boolean;
 }
 
 const DEFAULT_MESSAGE_LIMIT = 50;
@@ -27,6 +28,7 @@ export function register_list_command(program: Command, get_container: Container
     .option('-m, --mailbox <email>', 'list snapshots for a specific mailbox')
     .option('-s, --snapshot <id>', 'list messages inside a specific snapshot')
     .option('--all', 'show all messages (default caps at 50)')
+    .option('-S, --subjects', 'reveal email subjects (hidden by default for data protection)')
     .action((options: ListOptions) => execute_list(get_container(), options));
 }
 
@@ -39,7 +41,13 @@ async function execute_list(container: Container, options: ListOptions): Promise
   const catalog = container.get(CatalogService);
 
   if (options.snapshot) {
-    await print_snapshot_messages(catalog, tenant_id, options.snapshot, options.all);
+    await print_snapshot_messages(
+      catalog,
+      tenant_id,
+      options.snapshot,
+      options.all,
+      options.subjects,
+    );
   } else if (options.mailbox) {
     await print_mailbox_snapshots(catalog, tenant_id, options.mailbox);
   } else {
@@ -142,6 +150,7 @@ async function print_snapshot_messages(
   tenant_id: string,
   snapshot_id: string,
   show_all?: boolean,
+  reveal_subjects?: boolean,
 ): Promise<void> {
   const manifest = await catalog.get_snapshot_detail(tenant_id, snapshot_id);
 
@@ -159,26 +168,33 @@ async function print_snapshot_messages(
   logger.info(`Mailbox: ${manifest.mailbox_id}`);
   logger.info(`${total} message(s), ${format_bytes(manifest.total_size_bytes)}\n`);
 
-  const header = '  ' + pad('#', 6) + pad('Message ID', 24) + pad('Size', 10) + 'Storage Key';
+  const has_att = entries.some((e) => e.attachments && e.attachments.length > 0);
+  const header = '  ' + pad('#', 6) + pad('Size', 10) + (has_att ? pad('Att', 6) : '') + 'Subject';
   console.log(header);
-  console.log('  ' + '-'.repeat(header.length - 2));
+  console.log('  ' + '-'.repeat(76));
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i]!;
     const att_size = e.attachments?.reduce((sum, a) => sum + a.size_bytes, 0) ?? 0;
     const total_entry_size = e.size_bytes + att_size;
-    const short_id = e.object_id.length > 20 ? e.object_id.slice(0, 20) + '...' : e.object_id;
+    const att_count = e.attachments?.length ?? 0;
+    const subject = reveal_subjects ? truncate(e.subject ?? '(no subject)', 60) : 'HIDDEN';
+
     console.log(
       '  ' +
         pad(String(i + 1), 6) +
-        pad(short_id, 24) +
         pad(format_bytes(total_entry_size), 10) +
-        e.storage_key,
+        pad(String(att_count), 6) +
+        subject,
     );
   }
 
   if (limit < total) {
     console.log(`\n  ... (${limit} of ${total} shown, use --all for full list)`);
+  }
+
+  if (!reveal_subjects) {
+    console.log('\n  Subjects hidden for data protection. Use -S to reveal.');
   }
 }
 
@@ -188,6 +204,10 @@ async function print_snapshot_messages(
 
 function pad(str: string, width: number): string {
   return str.padEnd(width);
+}
+
+function truncate(str: string, max: number): string {
+  return str.length > max ? str.slice(0, max - 1) + '~' : str;
 }
 
 function format_bytes(bytes: number): string {

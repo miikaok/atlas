@@ -113,7 +113,7 @@ describe('CatalogService', () => {
       const alice = result.find((m) => m.mailbox_id === 'alice@test.com')!;
       expect(alice.snapshot_count).toBe(2);
       expect(alice.total_objects).toBe(20);
-      expect(alice.total_size_bytes).toBe(2000);
+      expect(alice.total_size_bytes).toBe(3000);
 
       const bob = result.find((m) => m.mailbox_id === 'bob@test.com')!;
       expect(bob.snapshot_count).toBe(1);

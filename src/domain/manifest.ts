@@ -26,5 +26,6 @@ export interface ManifestEntry {
   readonly storage_key: string;
   readonly checksum: string;
   readonly size_bytes: number;
+  readonly subject?: string;
   readonly attachments?: AttachmentEntry[];
 }

@@ -302,6 +302,7 @@ export class MailboxSyncService {
       storage_key,
       checksum,
       size_bytes: message.size_bytes,
+      subject: message.subject,
     };
 
     return { manifest_entry, was_new: !already_stored };

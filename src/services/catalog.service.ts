@@ -58,23 +58,35 @@ export class CatalogService {
    * Finds a message entry in the manifest, fetches the encrypted blob
    * from object storage, decrypts it, and returns the parsed JSON
    * together with any attachment metadata from the manifest.
+   *
+   * @param message_ref - Either a 1-based numeric index (e.g. "34") matching the
+   *   `atlas list` output, or a full Graph API message ID string.
    */
   async read_message(
     tenant_id: string,
     snapshot_id: string,
-    message_id: string,
+    message_ref: string,
   ): Promise<ReadMessageResult | undefined> {
     const ctx = await this._tenant_factory.create(tenant_id);
     const manifest = await this._manifests.find_by_snapshot(ctx, snapshot_id);
     if (!manifest) return undefined;
 
-    const entry = manifest.entries.find((e) => e.object_id === message_id);
+    const entry = this.resolve_entry(manifest, message_ref);
     if (!entry) return undefined;
 
     const encrypted = await ctx.storage.get(entry.storage_key);
     const json = ctx.decrypt(encrypted);
     const message = JSON.parse(json.toString('utf-8')) as Record<string, unknown>;
     return { message, attachments: entry.attachments ?? [] };
+  }
+
+  /** Resolves a manifest entry by 1-based index or by object_id. */
+  private resolve_entry(manifest: Manifest, ref: string) {
+    const index = Number(ref);
+    if (Number.isInteger(index) && index >= 1) {
+      return manifest.entries[index - 1];
+    }
+    return manifest.entries.find((e) => e.object_id === ref);
   }
 }
 
@@ -89,19 +101,24 @@ function group_by_mailbox(manifests: Manifest[]): Map<string, Manifest[]> {
   return map;
 }
 
-/** Builds one MailboxSummary per group using the latest manifest's stats. */
+/**
+ * Builds one MailboxSummary per group. Uses the latest manifest for
+ * object count and date, and sums total_size_bytes across all snapshots
+ * since each incremental snapshot only contains newly arrived data.
+ */
 function build_mailbox_summaries(groups: Map<string, Manifest[]>): MailboxSummary[] {
   const summaries: MailboxSummary[] = [];
 
   for (const [mailbox_id, manifests] of groups) {
     manifests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     const latest = manifests[0]!;
+    const cumulative_size = manifests.reduce((sum, m) => sum + m.total_size_bytes, 0);
 
     summaries.push({
       mailbox_id,
       snapshot_count: manifests.length,
       total_objects: latest.total_objects,
-      total_size_bytes: latest.total_size_bytes,
+      total_size_bytes: cumulative_size,
       last_backup_at: new Date(latest.created_at),
     });
   }

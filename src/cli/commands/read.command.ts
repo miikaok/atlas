@@ -22,7 +22,7 @@ export function register_read_command(program: Command, get_container: Container
     .command('read')
     .description('Decrypt and display a single backed-up message')
     .requiredOption('-s, --snapshot <id>', 'snapshot containing the message')
-    .requiredOption('--message <id>', 'message ID to read')
+    .requiredOption('--message <ref>', 'message # from atlas list, or full message ID')
     .option('-t, --tenant <id>', 'tenant identifier (defaults to config)')
     .option('--raw', 'output the full JSON blob instead of formatted view')
     .action((options: ReadOptions) => execute_read(get_container(), options));
