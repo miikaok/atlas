@@ -1,7 +1,7 @@
 # m365-atlas
 
 [![CI](https://github.com/miikaok/atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/miikaok/atlas/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/miikaok/GIST_ID/raw/m365-atlas-coverage.json)](https://github.com/miikaok/atlas/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/miikaok/34b7e6013b428e289db442d3d28f4f14/raw/m365-atlas-coverage.json)](https://github.com/miikaok/atlas/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/m365-atlas)](https://www.npmjs.com/package/m365-atlas)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 
@@ -84,27 +84,27 @@ Atlas loads configuration from three sources, merged in this order (later wins):
 2. `.env` file (loaded via dotenv, does not overwrite existing env vars)
 3. Environment variables (always win)
 
-| Variable | Config field | Required | Description |
-|---|---|---|---|
-| `ATLAS_TENANT_ID` | `tenant_id` | yes | Azure AD tenant ID |
-| `ATLAS_CLIENT_ID` | `client_id` | yes | App registration client ID |
-| `ATLAS_CLIENT_SECRET` | `client_secret` | yes | App registration client secret |
-| `ATLAS_S3_ENDPOINT` | `s3_endpoint` | yes | S3 endpoint URL (e.g. `http://localhost:9002`) |
-| `ATLAS_S3_ACCESS_KEY` | `s3_access_key` | yes | S3 access key |
-| `ATLAS_S3_SECRET_KEY` | `s3_secret_key` | yes | S3 secret key |
-| `ATLAS_S3_REGION` | `s3_region` | no | S3 region (default: `us-east-1`) |
-| `ATLAS_ENCRYPTION_PASSPHRASE` | `encryption_passphrase` | yes | Master passphrase for envelope encryption |
+| Variable                      | Config field            | Required | Description                                    |
+| ----------------------------- | ----------------------- | -------- | ---------------------------------------------- |
+| `ATLAS_TENANT_ID`             | `tenant_id`             | yes      | Azure AD tenant ID                             |
+| `ATLAS_CLIENT_ID`             | `client_id`             | yes      | App registration client ID                     |
+| `ATLAS_CLIENT_SECRET`         | `client_secret`         | yes      | App registration client secret                 |
+| `ATLAS_S3_ENDPOINT`           | `s3_endpoint`           | yes      | S3 endpoint URL (e.g. `http://localhost:9002`) |
+| `ATLAS_S3_ACCESS_KEY`         | `s3_access_key`         | yes      | S3 access key                                  |
+| `ATLAS_S3_SECRET_KEY`         | `s3_secret_key`         | yes      | S3 secret key                                  |
+| `ATLAS_S3_REGION`             | `s3_region`             | no       | S3 region (default: `us-east-1`)               |
+| `ATLAS_ENCRYPTION_PASSPHRASE` | `encryption_passphrase` | yes      | Master passphrase for envelope encryption      |
 
 ## Azure AD setup
 
 Register an application in Azure Portal with these **Application** permissions (not Delegated):
 
-| Permission | Why |
-|---|---|
-| `Mail.Read` | Read mailbox contents via Graph API |
-| `Mail.ReadWrite` | Restore messages and create folders in target mailboxes |
-| `User.Read.All` | Enumerate users / resolve mailbox IDs |
-| `MailboxSettings.Read` | Read mailbox metadata and folder structure |
+| Permission             | Why                                                     |
+| ---------------------- | ------------------------------------------------------- |
+| `Mail.Read`            | Read mailbox contents via Graph API                     |
+| `Mail.ReadWrite`       | Restore messages and create folders in target mailboxes |
+| `User.Read.All`        | Enumerate users / resolve mailbox IDs                   |
+| `MailboxSettings.Read` | Read mailbox metadata and folder structure              |
 
 > `Mail.ReadWrite` is only required for `atlas restore`. Backup, list, and read operations work with `Mail.Read` alone.
 
@@ -123,12 +123,12 @@ atlas backup --mailbox user@company.com -f Inbox Sent # specific folders only
 atlas backup -t <tenant-id> -m user@company.com       # explicit tenant
 ```
 
-| Option | Description |
-|---|---|
-| `-m, --mailbox <id>` | Mailbox to back up |
-| `-f, --folder <name...>` | Filter to specific folder(s) by display name |
-| `--full` | Ignore saved delta links, run full enumeration |
-| `-t, --tenant <id>` | Override tenant ID from config |
+| Option                   | Description                                    |
+| ------------------------ | ---------------------------------------------- |
+| `-m, --mailbox <id>`     | Mailbox to back up                             |
+| `-f, --folder <name...>` | Filter to specific folder(s) by display name   |
+| `--full`                 | Ignore saved delta links, run full enumeration |
+| `-t, --tenant <id>`      | Override tenant ID from config                 |
 
 ### `atlas list`
 
@@ -142,13 +142,13 @@ atlas list -s <snapshot-id> --all       # all messages
 atlas list -s <snapshot-id> -S          # reveal email subjects
 ```
 
-| Option | Description |
-|---|---|
-| `-m, --mailbox <email>` | Show snapshots for this mailbox |
-| `-s, --snapshot <id>` | Show messages inside this snapshot |
-| `--all` | Show all messages (default caps at 50) |
-| `-S, --subjects` | Reveal email subjects (hidden by default for data protection) |
-| `-t, --tenant <id>` | Override tenant ID |
+| Option                  | Description                                                   |
+| ----------------------- | ------------------------------------------------------------- |
+| `-m, --mailbox <email>` | Show snapshots for this mailbox                               |
+| `-s, --snapshot <id>`   | Show messages inside this snapshot                            |
+| `--all`                 | Show all messages (default caps at 50)                        |
+| `-S, --subjects`        | Reveal email subjects (hidden by default for data protection) |
+| `-t, --tenant <id>`     | Override tenant ID                                            |
 
 ### `atlas read`
 
@@ -159,12 +159,12 @@ atlas read -s <snapshot-id> --message 34        # formatted view (by index)
 atlas read -s <snapshot-id> --message 34 --raw  # full JSON
 ```
 
-| Option | Description |
-|---|---|
-| `-s, --snapshot <id>` | Snapshot containing the message |
-| `--message <ref>` | Message `#` from `atlas list`, or full Graph message ID |
-| `--raw` | Output full JSON blob instead of formatted headers + body |
-| `-t, --tenant <id>` | Override tenant ID |
+| Option                | Description                                               |
+| --------------------- | --------------------------------------------------------- |
+| `-s, --snapshot <id>` | Snapshot containing the message                           |
+| `--message <ref>`     | Message `#` from `atlas list`, or full Graph message ID   |
+| `--raw`               | Output full JSON blob instead of formatted headers + body |
+| `-t, --tenant <id>`   | Override tenant ID                                        |
 
 ### `atlas verify`
 
@@ -198,16 +198,16 @@ atlas restore -m user@company.com -T other@company.com               # cross-mai
 atlas restore -m user@company.com -T other@company.com -f Inbox      # cross-mailbox + folder
 ```
 
-| Option | Description |
-|---|---|
-| `-s, --snapshot <id>` | Restore from a specific snapshot |
-| `-m, --mailbox <email>` | Restore from all snapshots for this mailbox |
-| `-T, --target <email>` | Target mailbox for cross-mailbox restore (defaults to source) |
-| `-f, --folder <name>` | Restore only messages from this folder |
-| `--message <ref>` | Restore a single message by `#` index from `atlas list` |
-| `--start-date <YYYY-MM-DD>` | Include snapshots created on or after this date |
-| `--end-date <YYYY-MM-DD>` | Include snapshots created on or before this date |
-| `-t, --tenant <id>` | Override tenant ID |
+| Option                      | Description                                                   |
+| --------------------------- | ------------------------------------------------------------- |
+| `-s, --snapshot <id>`       | Restore from a specific snapshot                              |
+| `-m, --mailbox <email>`     | Restore from all snapshots for this mailbox                   |
+| `-T, --target <email>`      | Target mailbox for cross-mailbox restore (defaults to source) |
+| `-f, --folder <name>`       | Restore only messages from this folder                        |
+| `--message <ref>`           | Restore a single message by `#` index from `atlas list`       |
+| `--start-date <YYYY-MM-DD>` | Include snapshots created on or after this date               |
+| `--end-date <YYYY-MM-DD>`   | Include snapshots created on or before this date              |
+| `-t, --tenant <id>`         | Override tenant ID                                            |
 
 Either `--snapshot` or `--mailbox` is required. When using mailbox mode, entries are deduplicated across snapshots (newest version of each message wins). Cross-mailbox restores preserve the original folder names from the source mailbox.
 
@@ -224,13 +224,13 @@ atlas delete --purge                    # delete EVERYTHING in the tenant bucket
 atlas delete --purge -y                 # skip confirmation prompt
 ```
 
-| Option | Description |
-|---|---|
-| `-m, --mailbox <email>` | Delete all data, attachments, and manifests for a mailbox |
-| `-s, --snapshot <id>` | Delete a single snapshot manifest |
-| `--purge` | Delete all data, manifests, and encryption keys (irreversible) |
-| `-y, --yes` | Skip confirmation prompt |
-| `-t, --tenant <id>` | Override tenant ID |
+| Option                  | Description                                                    |
+| ----------------------- | -------------------------------------------------------------- |
+| `-m, --mailbox <email>` | Delete all data, attachments, and manifests for a mailbox      |
+| `-s, --snapshot <id>`   | Delete a single snapshot manifest                              |
+| `--purge`               | Delete all data, manifests, and encryption keys (irreversible) |
+| `-y, --yes`             | Skip confirmation prompt                                       |
+| `-t, --tenant <id>`     | Override tenant ID                                             |
 
 ## Security model
 
@@ -256,11 +256,11 @@ DEK encrypts all data + manifests for that tenant
 
 Integrity is validated at three layers:
 
-| Layer | Mechanism | When |
-|---|---|---|
-| Plaintext | SHA-256 checksum stored in manifest | Backup, verify, restore |
-| Transport | `Content-MD5` header on S3 PUT | Upload (S3 rejects mismatches) |
-| At-rest | AES-256-GCM authentication tag | Every decrypt (tamper = exception) |
+| Layer     | Mechanism                           | When                               |
+| --------- | ----------------------------------- | ---------------------------------- |
+| Plaintext | SHA-256 checksum stored in manifest | Backup, verify, restore            |
+| Transport | `Content-MD5` header on S3 PUT      | Upload (S3 rejects mismatches)     |
+| At-rest   | AES-256-GCM authentication tag      | Every decrypt (tamper = exception) |
 
 ## Delta sync
 
@@ -326,15 +326,15 @@ pnpm run format         # prettier
 
 ### Code conventions
 
-| Rule | Enforced by |
-|---|---|
-| `kebab-case` file names | `eslint-plugin-check-file` |
-| `snake_case` variables, parameters, properties | `@typescript-eslint/naming-convention` |
-| `PascalCase` types, classes, interfaces | `@typescript-eslint/naming-convention` |
-| Max 300 lines per file (excluding blanks/comments) | `max-lines` ESLint rule |
-| Single quotes, trailing commas, 100-char print width | Prettier |
-| `@/` path aliases (no relative imports) | `tsconfig.json` paths |
-| JSDoc on all exported functions | Convention |
+| Rule                                                 | Enforced by                            |
+| ---------------------------------------------------- | -------------------------------------- |
+| `kebab-case` file names                              | `eslint-plugin-check-file`             |
+| `snake_case` variables, parameters, properties       | `@typescript-eslint/naming-convention` |
+| `PascalCase` types, classes, interfaces              | `@typescript-eslint/naming-convention` |
+| Max 300 lines per file (excluding blanks/comments)   | `max-lines` ESLint rule                |
+| Single quotes, trailing commas, 100-char print width | Prettier                               |
+| `@/` path aliases (no relative imports)              | `tsconfig.json` paths                  |
+| JSDoc on all exported functions                      | Convention                             |
 
 When a file approaches 300 lines, the logic should be split into smaller helper files rather than compacted. Each function name should describe exactly what it does without hidden side-effects; multi-responsibility functions are split into a parent that calls focused child functions.
 
