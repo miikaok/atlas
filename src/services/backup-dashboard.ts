@@ -4,7 +4,7 @@ import { format_duration } from '@/services/sync-progress.helper';
 interface FolderRow {
   name: string;
   total_items: number;
-  status: 'pending' | 'active' | 'paging' | 'done' | 'empty' | 'synced' | 'error';
+  status: 'pending' | 'active' | 'paging' | 'done' | 'empty' | 'synced' | 'interrupted' | 'error';
   processed: number;
   stored: number;
   deduped: number;
@@ -105,6 +105,26 @@ export class BackupDashboard {
     this.render();
   }
 
+  /** Marks a single folder as interrupted (yellow). */
+  mark_interrupted(index: number): void {
+    const row = this._rows[index];
+    if (!row) return;
+    row.status = 'interrupted';
+    if (!this._is_tty) this.log_non_tty(row);
+    this.render();
+  }
+
+  /** Marks all non-terminal folders (pending/active/paging) as interrupted. */
+  mark_all_pending_interrupted(): void {
+    for (const row of this._rows) {
+      if (row.status === 'pending' || row.status === 'active' || row.status === 'paging') {
+        row.status = 'interrupted';
+        if (!this._is_tty) this.log_non_tty(row);
+      }
+    }
+    this.render();
+  }
+
   /** Marks a folder as errored (red). */
   mark_error(index: number, message: string): void {
     const row = this._rows[index];
@@ -140,6 +160,8 @@ export class BackupDashboard {
       console.log(`  [==] ${row.name} -- ${row.total_items} items -- up to date`);
     } else if (row.status === 'done') {
       console.log(`  [ok] ${row.name} -- ${row.stored} stored, ${row.deduped} dedup`);
+    } else if (row.status === 'interrupted') {
+      console.log(`  [~~] ${row.name} -- interrupted`);
     } else if (row.status === 'error') {
       console.log(`  [!!] ${row.name} -- ERROR: ${row.error_message}`);
     }
@@ -199,6 +221,9 @@ function format_folder_row(row: FolderRow): string {
 
     case 'synced':
       return chalk.yellow(`[==] ${name} ${row.total_items} items -- up to date`);
+
+    case 'interrupted':
+      return chalk.yellow(`[~~] ${name} -- interrupted`);
 
     case 'empty':
       return chalk.gray(`[--] ${name} 0 items -- empty`);
