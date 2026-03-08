@@ -28,11 +28,14 @@ export interface SyncOptions {
   readonly folder_filter?: string[] | undefined;
   /** When true, ignores saved delta links and performs a full enumeration of every folder. */
   readonly force_full?: boolean | undefined;
+  /** Graph API page size for delta requests (1-100, default 25). */
+  readonly page_size?: number | undefined;
 }
 
 @injectable()
 export class MailboxSyncService {
   private _interrupted = false;
+  private _sigint_count = 0;
 
   constructor(
     @inject(TENANT_CONTEXT_FACTORY_TOKEN) private readonly _tenant_factory: TenantContextFactory,
@@ -77,8 +80,15 @@ export class MailboxSyncService {
     const sync_start = Date.now();
 
     this._interrupted = false;
+    this._sigint_count = 0;
     const on_sigint = (): void => {
+      this._sigint_count++;
       this._interrupted = true;
+      if (this._sigint_count === 1) {
+        dashboard.set_status(
+          '[!] Stopping -- finishing page fetch to save delta state (Ctrl+C again to force quit)',
+        );
+      }
     };
     process.on('SIGINT', on_sigint);
 
@@ -106,11 +116,13 @@ export class MailboxSyncService {
             sync_start,
             dashboard,
             is_interrupted: () => this._interrupted,
+            is_hard_stopped: () => this._sigint_count >= 2,
             prev_delta_link: prev_link,
             previous_manifest_entries: previous_entry_count,
+            page_size: options.page_size,
           });
           all_entries.push(...result.entries);
-          if (!this._interrupted) {
+          if (result.delta_link) {
             new_delta_links[folder.folder_id] = result.delta_link;
           }
           f_stored = result.stored;

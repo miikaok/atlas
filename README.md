@@ -120,15 +120,19 @@ Back up mailboxes from M365 tenant to object storage. Displays a real-time multi
 atlas backup --mailbox user@company.com              # incremental backup
 atlas backup --mailbox user@company.com --full        # force full sync (ignore delta state)
 atlas backup --mailbox user@company.com -f Inbox Sent # specific folders only
+atlas backup --mailbox user@company.com -P 50         # larger page size for fewer API round-trips
 atlas backup -t <tenant-id> -m user@company.com       # explicit tenant
 ```
 
-| Option                   | Description                                    |
-| ------------------------ | ---------------------------------------------- |
-| `-m, --mailbox <id>`     | Mailbox to back up                             |
-| `-f, --folder <name...>` | Filter to specific folder(s) by display name   |
-| `--full`                 | Ignore saved delta links, run full enumeration |
-| `-t, --tenant <id>`      | Override tenant ID from config                 |
+| Option                   | Description                                          |
+| ------------------------ | ---------------------------------------------------- |
+| `-m, --mailbox <id>`     | Mailbox to back up                                   |
+| `-f, --folder <name...>` | Filter to specific folder(s) by display name         |
+| `--full`                 | Ignore saved delta links, run full enumeration       |
+| `-P, --page-size <n>`    | Graph API page size per delta request (1-100, default 25) |
+| `-t, --tenant <id>`      | Override tenant ID from config                       |
+
+> **Page size tuning:** The `--page-size` flag controls how many messages are requested per Graph API delta page via the `Prefer: odata.maxpagesize` header. This is a *hint* -- the server may return fewer items when response payloads are large (e.g. messages with heavy HTML bodies or many inline images). Lower values reduce memory pressure and allow partial progress to be saved more frequently during interrupts. Higher values reduce HTTP round-trips but increase per-page processing time. The default of 25 is a balanced starting point; adjust based on your mailbox characteristics.
 
 ### `atlas list`
 
@@ -272,7 +276,7 @@ Backups use Microsoft Graph [delta queries](https://learn.microsoft.com/en-us/gr
 4. **Force full** -- `atlas backup --full` ignores all saved delta links.
 5. **Graceful interruption** -- Ctrl+C during a backup sets an interrupt flag, saves all already-stored objects and completed delta links into a partial manifest, and marks interrupted folders in the dashboard. The next incremental run picks up from the completed state.
 
-Message bodies are fetched inline via the delta `$select` parameter, avoiding per-message API calls. Transient Graph API errors (429, 503, 504) are retried with exponential backoff.
+Message bodies are fetched inline via the delta `$select` parameter, avoiding per-message API calls. Page size is configurable via `--page-size` (default 25); the Graph API treats this as a maximum hint and may return smaller pages for large payloads. Transient Graph API errors (429, 503, 504) are retried with exponential backoff.
 
 ## Restore architecture
 

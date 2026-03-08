@@ -25,8 +25,15 @@ export interface DeltaSyncResult {
   readonly delta_reset: boolean;
 }
 
-/** Called after each delta page to report enumeration progress. */
-export type DeltaPageCallback = (page_num: number, items_so_far: number) => void;
+/**
+ * Called after each delta page with the page's converted messages.
+ * Process messages inline for streaming. Return false to abort paging.
+ */
+export type DeltaPageCallback = (
+  page_num: number,
+  items_so_far: number,
+  page_messages: MailMessage[],
+) => Promise<boolean> | boolean | void;
 
 export interface MessageAttachment {
   readonly attachment_id: string;
@@ -53,6 +60,7 @@ export interface MailboxConnector {
     folder_id: string,
     prev_delta_link?: string | undefined,
     on_page?: DeltaPageCallback | undefined,
+    page_size?: number | undefined,
   ): Promise<DeltaSyncResult>;
 
   fetch_message(tenant_id: string, mailbox_id: string, message_id: string): Promise<MailMessage>;

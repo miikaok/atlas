@@ -125,6 +125,7 @@ describe('MailboxSyncService', () => {
       'f1',
       undefined,
       expect.any(Function),
+      undefined,
     );
     expect(mock_connector.fetch_delta).toHaveBeenCalledWith(
       't',
@@ -132,6 +133,7 @@ describe('MailboxSyncService', () => {
       'f2',
       undefined,
       expect.any(Function),
+      undefined,
     );
   });
 
@@ -207,6 +209,7 @@ describe('MailboxSyncService', () => {
       'folder-1',
       'https://prev-delta',
       expect.any(Function),
+      undefined,
     );
   });
 

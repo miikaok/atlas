@@ -110,6 +110,7 @@ describe('MailboxSyncService – force_full / stale-delta safeguard', () => {
       'folder-1',
       undefined,
       expect.any(Function),
+      undefined,
     );
   });
 
@@ -141,6 +142,7 @@ describe('MailboxSyncService – force_full / stale-delta safeguard', () => {
       'folder-1',
       'https://stale-delta',
       expect.any(Function),
+      undefined,
     );
     expect(mock_connector.fetch_delta).toHaveBeenNthCalledWith(
       2,
@@ -149,6 +151,7 @@ describe('MailboxSyncService – force_full / stale-delta safeguard', () => {
       'folder-1',
       undefined,
       expect.any(Function),
+      undefined,
     );
     expect(result.manifest.entries).toHaveLength(1);
   });

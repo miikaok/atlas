@@ -7,6 +7,7 @@ import { GRAPH_CLIENT_TOKEN } from '@/adapters/m365/graph-client.factory';
 interface MockChain {
   select: ReturnType<typeof vi.fn>;
   top: ReturnType<typeof vi.fn>;
+  header: ReturnType<typeof vi.fn>;
   get: ReturnType<typeof vi.fn>;
 }
 
@@ -20,10 +21,12 @@ function create_mock_client(): MockClient {
   const chain: MockChain = {
     select: vi.fn(),
     top: vi.fn(),
+    header: vi.fn(),
     get: get_fn,
   };
   chain.select.mockReturnValue(chain);
   chain.top.mockReturnValue(chain);
+  chain.header.mockReturnValue(chain);
 
   const api_fn = vi.fn().mockReturnValue(chain);
   return { api: api_fn, _chain: chain };

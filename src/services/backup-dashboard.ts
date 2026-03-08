@@ -32,7 +32,8 @@ export class BackupDashboard {
   private readonly _total: TotalRow;
   private readonly _is_tty: boolean;
   private _rendered = false;
-  private readonly _line_count: number;
+  private _last_rendered_lines = 0;
+  private _status_message = '';
 
   constructor(folders: { name: string; total_items: number }[]) {
     this._is_tty = !!process.stdout.isTTY;
@@ -51,7 +52,12 @@ export class BackupDashboard {
       error_message: '',
     }));
     this._total = { global_processed: 0, global_total: 0, rate: 0, eta_seconds: 0 };
-    this._line_count = this._rows.length + 1;
+    this.render();
+  }
+
+  /** Sets a status message line below the TOTAL row (e.g. interrupt notice). */
+  set_status(message: string): void {
+    this._status_message = message;
     this.render();
   }
 
@@ -177,15 +183,17 @@ export class BackupDashboard {
 
     const lines = this._rows.map((r) => format_folder_row(r));
     lines.push(format_total_row(this._total));
+    if (this._status_message) lines.push(chalk.yellow(this._status_message));
 
     if (this._rendered) {
-      process.stdout.write(`\x1b[${this._line_count}A`);
+      process.stdout.write(`\x1b[${this._last_rendered_lines}A`);
     }
 
     for (const line of lines) {
       process.stdout.write(`\r  ${line}\x1b[K\n`);
     }
 
+    this._last_rendered_lines = lines.length;
     this._rendered = true;
   }
 }

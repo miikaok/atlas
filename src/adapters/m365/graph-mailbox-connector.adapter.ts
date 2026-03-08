@@ -131,20 +131,22 @@ export class GraphMailboxConnector implements MailboxConnector {
     folder_id: string,
     prev_delta_link?: string,
     on_page?: DeltaPageCallback,
+    page_size?: number,
   ): Promise<DeltaSyncResult> {
     logger.debug(
       prev_delta_link
         ? `fetch_delta: resuming from saved delta link`
         : `fetch_delta: starting initial full sync`,
     );
+    const ps = page_size ?? 25;
 
     try {
-      return await this.execute_delta_sync(mailbox_id, folder_id, prev_delta_link, false, on_page);
+      return await this.execute_delta_sync(mailbox_id, folder_id, prev_delta_link, false, on_page, ps);
     } catch (err) {
       rethrow_if_access_denied(err);
       if (is_invalid_delta_error(err)) {
         logger.debug('fetch_delta: invalid delta token, falling back to full sync');
-        return await this.execute_delta_sync(mailbox_id, folder_id, undefined, true, on_page);
+        return await this.execute_delta_sync(mailbox_id, folder_id, undefined, true, on_page, ps);
       }
       throw err;
     }
@@ -235,26 +237,31 @@ export class GraphMailboxConnector implements MailboxConnector {
 
   /**
    * Fetches the first page of an initial delta request using the SDK fluent API.
-   * No $top is set -- the API decides page size (typically smaller when body
-   * is selected) and pages through ALL items via @odata.nextLink.
-   * Setting $top can cap total results across pages, not just per-page.
+   * Uses Prefer: odata.maxpagesize to request larger pages and reduce round-trips.
+   * The server may return fewer items; $top is intentionally avoided as it caps
+   * total results across pages for delta queries.
    */
   private async fetch_initial_delta_page(
     mailbox_id: string,
     folder_id: string,
+    page_size: number,
   ): Promise<GraphPageResponse> {
     return (await this._client
       .api(this.delta_path(mailbox_id, folder_id))
+      .header('Prefer', `odata.maxpagesize=${page_size}`)
       .select(DELTA_SELECT_FIELDS)
       .get()) as GraphPageResponse;
   }
 
   /**
    * Fetches a page using a full @odata.nextLink or @odata.deltaLink URL.
-   * These URLs already carry their own query parameters.
+   * The Prefer header is re-sent on each request to ensure larger pages.
    */
-  private async fetch_continuation_page(full_url: string): Promise<GraphPageResponse> {
-    return (await this._client.api(full_url).get()) as GraphPageResponse;
+  private async fetch_continuation_page(full_url: string, page_size: number): Promise<GraphPageResponse> {
+    return (await this._client
+      .api(full_url)
+      .header('Prefer', `odata.maxpagesize=${page_size}`)
+      .get()) as GraphPageResponse;
   }
 
   /**
@@ -268,6 +275,7 @@ export class GraphMailboxConnector implements MailboxConnector {
     prev_delta_link: string | undefined,
     delta_reset: boolean,
     on_page?: DeltaPageCallback,
+    page_size = 25,
   ): Promise<DeltaSyncResult> {
     const is_initial = !prev_delta_link;
     const messages: MailMessage[] = [];
@@ -276,31 +284,37 @@ export class GraphMailboxConnector implements MailboxConnector {
     let page_count = 0;
 
     let page: GraphPageResponse = is_initial
-      ? await this.fetch_initial_delta_page(mailbox_id, folder_id)
-      : await this.fetch_continuation_page(prev_delta_link);
+      ? await this.fetch_initial_delta_page(mailbox_id, folder_id, page_size)
+      : await this.fetch_continuation_page(prev_delta_link, page_size);
 
     while (true) {
       page_count++;
       const items = (page.value ?? []) as GraphDeltaMessage[];
+      const page_messages: MailMessage[] = [];
 
       for (const item of items) {
         if (item['@removed'] && item.id) {
           removed_ids.push(item.id);
         } else if (item.id) {
-          messages.push(this.graph_message_to_mail_message(item));
+          const msg = this.graph_message_to_mail_message(item);
+          messages.push(msg);
+          page_messages.push(msg);
         }
       }
 
-      on_page?.(page_count, messages.length);
+      const result = on_page?.(page_count, messages.length, page_messages);
+      const should_continue = result instanceof Promise ? await result : result;
 
       if (page['@odata.deltaLink']) {
         delta_link = page['@odata.deltaLink'];
       }
 
+      if (should_continue === false) break;
+
       const next_url = page['@odata.nextLink'];
       if (!next_url) break;
 
-      page = await this.fetch_continuation_page(next_url);
+      page = await this.fetch_continuation_page(next_url, page_size);
     }
 
     return { messages, removed_ids, delta_link, delta_reset };
@@ -330,7 +344,7 @@ export class GraphMailboxConnector implements MailboxConnector {
     let current_url: string | undefined = start_url;
 
     while (current_url) {
-      const page = await this.fetch_continuation_page(current_url);
+      const page = await this.fetch_continuation_page(current_url, 100);
       if (page.value) {
         all_items.push(...(page.value as T[]));
       }

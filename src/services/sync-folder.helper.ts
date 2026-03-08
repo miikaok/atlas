@@ -28,11 +28,40 @@ export interface FolderSyncParams {
   sync_start: number;
   dashboard: BackupDashboard;
   is_interrupted: () => boolean;
+  /** When true, abort paging immediately (second Ctrl+C). */
+  is_hard_stopped: () => boolean;
   prev_delta_link?: string;
   previous_manifest_entries?: number;
+  /** Graph API page size for delta requests. */
+  page_size?: number;
 }
 
-/** Runs a delta sync for one folder, driving the dashboard for live progress. */
+/** Processes a single message: dedup check, encrypt, store, fetch attachments. */
+async function process_message(
+  ctx: TenantContext,
+  connector: MailboxConnector,
+  tenant_id: string,
+  mailbox_id: string,
+  message: MailMessage,
+  entries: ManifestEntry[],
+  stats: { stored: number; deduplicated: number; att_stored: number },
+): Promise<void> {
+  const entry = await store_single_message(ctx, message, mailbox_id);
+  if (entry.was_new) stats.stored++;
+  else stats.deduplicated++;
+
+  const att = message.has_attachments
+    ? await fetch_and_store_attachments(ctx, connector, tenant_id, mailbox_id, message.message_id)
+    : undefined;
+
+  if (att) stats.att_stored += att.length;
+
+  entries.push(
+    att && att.length > 0 ? { ...entry.manifest_entry, attachments: att } : entry.manifest_entry,
+  );
+}
+
+/** Runs a delta sync for one folder, processing messages inline as pages arrive. */
 export async function sync_single_folder(params: FolderSyncParams): Promise<FolderSyncResult> {
   const {
     ctx,
@@ -46,20 +75,48 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
     sync_start,
     dashboard,
     is_interrupted,
+    is_hard_stopped,
     prev_delta_link,
     folder_total,
+    page_size,
   } = params;
   const previous_manifest_entries = params.previous_manifest_entries ?? 0;
 
+  const entries: ManifestEntry[] = [];
+  const stats = { stored: 0, deduplicated: 0, att_stored: 0 };
+  let folder_processed = 0;
+  let streamed = false;
   const page_start = Date.now();
 
-  const on_page = (_page: number, items: number): void => {
+  const on_page = async (
+    _page: number,
+    total_items: number,
+    page_messages: MailMessage[],
+  ): Promise<boolean> => {
+    streamed = true;
+
+    if (is_hard_stopped()) return false;
+
     const elapsed_ms = Date.now() - page_start;
-    const page_rate = calc_rate(items, elapsed_ms);
-    const remaining = global_total - global_processed_before - items;
+    const page_rate = calc_rate(total_items, elapsed_ms);
+    const remaining = global_total - global_processed_before - total_items;
     const eta = page_rate > 0 ? remaining / page_rate : 0;
-    dashboard.update_paging(folder_index, items, page_rate, eta);
-    dashboard.update_total(global_processed_before, global_total, page_rate, eta);
+    dashboard.update_paging(folder_index, total_items, page_rate, eta);
+
+    if (is_interrupted()) return true;
+
+    for (const message of page_messages) {
+      if (is_interrupted()) break;
+      await process_message(ctx, connector, tenant_id, mailbox_id, message, entries, stats);
+      folder_processed++;
+      const gp = global_processed_before + folder_processed;
+      const rate = calc_rate(gp, Date.now() - sync_start);
+      const msg_eta = rate > 0 ? (global_total - gp) / rate : 0;
+      dashboard.update_total(gp, global_total, rate, msg_eta);
+      dashboard.update_active(folder_index, folder_processed, rate, msg_eta);
+    }
+
+    return true;
   };
 
   let delta = await connector.fetch_delta(
@@ -68,56 +125,45 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
     folder_id,
     prev_delta_link,
     on_page,
+    page_size,
   );
 
   if (
+    !is_interrupted() &&
     prev_delta_link &&
     delta.messages.length === 0 &&
     folder_total > 0 &&
     previous_manifest_entries === 0
   ) {
-    delta = await connector.fetch_delta(tenant_id, mailbox_id, folder_id, undefined, on_page);
+    delta = await connector.fetch_delta(
+      tenant_id,
+      mailbox_id,
+      folder_id,
+      undefined,
+      on_page,
+      page_size,
+    );
   }
 
-  const entries: ManifestEntry[] = [];
-  let stored = 0,
-    deduplicated = 0,
-    att_stored = 0,
-    folder_processed = 0;
-
-  for (const message of delta.messages) {
-    if (is_interrupted()) break;
-
-    const entry = await store_single_message(ctx, message, mailbox_id);
-    if (entry.was_new) stored++;
-    else deduplicated++;
-
-    const attachment_entries = message.has_attachments
-      ? await fetch_and_store_attachments(ctx, connector, tenant_id, mailbox_id, message.message_id)
-      : undefined;
-
-    if (attachment_entries) att_stored += attachment_entries.length;
-
-    entries.push(
-      attachment_entries && attachment_entries.length > 0
-        ? { ...entry.manifest_entry, attachments: attachment_entries }
-        : entry.manifest_entry,
-    );
-
-    folder_processed++;
-    const gp = global_processed_before + folder_processed;
-    const rate = calc_rate(gp, Date.now() - sync_start);
-    const eta = rate > 0 ? (global_total - gp) / rate : 0;
-    dashboard.update_active(folder_index, folder_processed, rate, eta);
-    dashboard.update_total(gp, global_total, rate, eta);
+  if (!streamed) {
+    for (const message of delta.messages) {
+      if (is_interrupted()) break;
+      await process_message(ctx, connector, tenant_id, mailbox_id, message, entries, stats);
+      folder_processed++;
+      const gp = global_processed_before + folder_processed;
+      const rate = calc_rate(gp, Date.now() - sync_start);
+      const eta = rate > 0 ? (global_total - gp) / rate : 0;
+      dashboard.update_total(gp, global_total, rate, eta);
+      dashboard.update_active(folder_index, folder_processed, rate, eta);
+    }
   }
 
   return {
     entries,
     delta_link: delta.delta_link,
-    stored,
-    deduplicated,
-    attachments_stored: att_stored,
+    stored: stats.stored,
+    deduplicated: stats.deduplicated,
+    attachments_stored: stats.att_stored,
     folder_processed,
   };
 }
