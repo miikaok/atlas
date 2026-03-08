@@ -141,7 +141,14 @@ export class GraphMailboxConnector implements MailboxConnector {
     const ps = page_size ?? 25;
 
     try {
-      return await this.execute_delta_sync(mailbox_id, folder_id, prev_delta_link, false, on_page, ps);
+      return await this.execute_delta_sync(
+        mailbox_id,
+        folder_id,
+        prev_delta_link,
+        false,
+        on_page,
+        ps,
+      );
     } catch (err) {
       rethrow_if_access_denied(err);
       if (is_invalid_delta_error(err)) {
@@ -257,7 +264,10 @@ export class GraphMailboxConnector implements MailboxConnector {
    * Fetches a page using a full @odata.nextLink or @odata.deltaLink URL.
    * The Prefer header is re-sent on each request to ensure larger pages.
    */
-  private async fetch_continuation_page(full_url: string, page_size: number): Promise<GraphPageResponse> {
+  private async fetch_continuation_page(
+    full_url: string,
+    page_size: number,
+  ): Promise<GraphPageResponse> {
     return (await this._client
       .api(full_url)
       .header('Prefer', `odata.maxpagesize=${page_size}`)
