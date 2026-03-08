@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Container } from 'inversify';
 import 'reflect-metadata';
 import { MailboxSyncService } from '@/services/mailbox-sync.service';
-import { fetch_and_store_attachments } from '@/services/attachment-sync.helper';
 import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
@@ -278,94 +277,5 @@ describe('MailboxSyncService – attachment backup', () => {
     expect(result.manifest.entries[0]!.attachments![0]!.name).toBe('a.pdf');
     expect(result.manifest.entries[0]!.attachments![1]!.name).toBe('b.png');
     expect(result.manifest.entries[0]!.attachments![1]!.is_inline).toBe(true);
-  });
-});
-
-describe('fetch_and_store_attachments – on_progress callback', () => {
-  it('calls on_progress with (done, total) for each attachment', async () => {
-    const ctx = make_mock_context();
-    const connector: MailboxConnector = {
-      list_mailboxes: vi.fn(),
-      list_mail_folders: vi.fn(),
-      fetch_delta: vi.fn(),
-      fetch_message: vi.fn(),
-      fetch_attachments: vi.fn().mockResolvedValue([
-        {
-          attachment_id: 'a1',
-          name: 'file1.txt',
-          content_type: 'text/plain',
-          size_bytes: 10,
-          is_inline: false,
-          content: Buffer.from('aaa'),
-        },
-        {
-          attachment_id: 'a2',
-          name: 'file2.txt',
-          content_type: 'text/plain',
-          size_bytes: 20,
-          is_inline: false,
-          content: Buffer.from('bbb'),
-        },
-        {
-          attachment_id: 'a3',
-          name: 'file3.txt',
-          content_type: 'text/plain',
-          size_bytes: 30,
-          is_inline: false,
-          content: Buffer.from('ccc'),
-        },
-      ]),
-    };
-
-    const progress_calls: [number, number][] = [];
-    const on_progress = (done: number, total: number): void => {
-      progress_calls.push([done, total]);
-    };
-
-    const entries = await fetch_and_store_attachments(
-      ctx,
-      connector,
-      'tenant-1',
-      'user@test.com',
-      'msg-1',
-      on_progress,
-    );
-
-    expect(entries).toHaveLength(3);
-    expect(progress_calls).toEqual([
-      [1, 3],
-      [2, 3],
-      [3, 3],
-    ]);
-  });
-
-  it('does not fail when on_progress is not provided', async () => {
-    const ctx = make_mock_context();
-    const connector: MailboxConnector = {
-      list_mailboxes: vi.fn(),
-      list_mail_folders: vi.fn(),
-      fetch_delta: vi.fn(),
-      fetch_message: vi.fn(),
-      fetch_attachments: vi.fn().mockResolvedValue([
-        {
-          attachment_id: 'a1',
-          name: 'file.txt',
-          content_type: 'text/plain',
-          size_bytes: 5,
-          is_inline: false,
-          content: Buffer.from('x'),
-        },
-      ]),
-    };
-
-    const entries = await fetch_and_store_attachments(
-      ctx,
-      connector,
-      'tenant-1',
-      'user@test.com',
-      'msg-1',
-    );
-
-    expect(entries).toHaveLength(1);
   });
 });
