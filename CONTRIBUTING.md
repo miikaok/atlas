@@ -1,0 +1,137 @@
+# Contributing to Atlas
+
+Thank you for considering a contribution to Atlas. This guide covers everything you need to get started.
+
+## Prerequisites
+
+- **Node.js** 20 or later
+- **pnpm** (package manager -- do not use npm or yarn)
+- **Docker** (optional, for running MinIO locally)
+
+## Getting started
+
+```bash
+# clone and install
+git clone https://github.com/miikaok/atlas.git
+cd atlas
+pnpm install
+
+# start local MinIO (S3-compatible storage)
+cd docker && docker compose up -d && cd ..
+
+# copy and fill in environment variables
+cp .env.example .env
+
+# verify everything works
+pnpm run build
+pnpm run lint
+pnpm run test
+```
+
+## Development workflow
+
+1. Create a branch from `main` for your change.
+2. Make your changes following the conventions below.
+3. Run the full quality gate before pushing:
+
+```bash
+pnpm run build
+pnpm run lint
+pnpm run format:check
+pnpm run test
+```
+
+4. Open a pull request against `main`. CI will run the same checks automatically.
+
+## Code conventions
+
+Atlas enforces conventions via ESLint and Prettier. The linter config in `eslint.config.js` is the source of truth.
+
+| Rule | Enforced by |
+| ---------------------------------------------------- | -------------------------------------- |
+| `kebab-case` file names | `eslint-plugin-check-file` |
+| `snake_case` variables, parameters, properties | `@typescript-eslint/naming-convention` |
+| `PascalCase` types, classes, interfaces | `@typescript-eslint/naming-convention` |
+| `UPPER_CASE` enum members | `@typescript-eslint/naming-convention` |
+| Max 300 effective lines per file | `max-lines` ESLint rule |
+| Single quotes, trailing commas, 100-char print width | Prettier |
+| `@/` path aliases (no relative imports) | `tsconfig.json` paths |
+| JSDoc on all exported functions | Convention |
+
+**SDK exception:** Files under `src/sdk.ts`, `src/ports/atlas/`, and `src/adapters/sdk/` use standard ES6 `camelCase` naming to provide a familiar interface for external consumers. This is configured as an ESLint override.
+
+### The 300-line rule
+
+When a file approaches 300 lines, split the logic into smaller, purpose-named files. Do not compact code to fit. The limit enforces separation of concerns.
+
+### Function design
+
+Every function name must describe exactly what it does. If a function does multiple things, split it into focused children and a parent that reads like an outline. No hidden side-effects.
+
+### Imports
+
+Always use the `@/` path alias. Never use relative imports:
+
+```typescript
+// good
+import { logger } from '@/utils/logger';
+
+// bad
+import { logger } from '../../utils/logger';
+```
+
+## Architecture
+
+Atlas follows hexagonal architecture (ports and adapters) with Inversify for dependency injection.
+
+```
+src/
+  domain/       Pure data models, no dependencies
+  ports/        Interfaces and tokens (input + output ports)
+  services/     Application logic, depends only on ports
+  adapters/     Concrete implementations of ports
+  cli/          CLI incoming adapter (commands, presenters)
+  utils/        Small helpers (logging, config)
+```
+
+Key rules:
+
+- **Services** depend on port interfaces only, never on adapters or CLI concerns.
+- **Adapters** implement port interfaces and are bound in `container.ts`.
+- **CLI commands** and the **SDK adapter** are incoming adapters that resolve use-case ports from the DI container.
+- Presentation concerns (chalk, dashboards, signal handling) belong in CLI adapters, not services.
+
+## Testing
+
+- Framework: **Vitest** with `@vitest/coverage-v8`
+- Test location: `tests/unit/` mirroring the `src/` structure
+- Mock port interfaces in tests, never real adapters
+- Each service and adapter should have dedicated test files
+- No network calls in unit tests
+
+```bash
+pnpm run test           # run tests
+pnpm run test:watch     # watch mode
+pnpm run test:coverage  # with coverage report
+```
+
+## Pull request guidelines
+
+- Keep PRs focused on a single concern.
+- Include unit tests for new or changed behavior.
+- Fill in the PR template checklist.
+- Make sure CI passes before requesting review.
+- Avoid committing secrets, credentials, or `.env` files.
+
+## Reporting issues
+
+Use the GitHub issue templates:
+
+- **Bug report** -- for unexpected behavior, crashes, or incorrect results.
+- **Feature request** -- for new capabilities or improvements.
+
+Include the Atlas version, Node.js version, OS, and S3 backend in bug reports.
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the [Apache License 2.0](./LICENSE).

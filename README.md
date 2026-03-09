@@ -491,6 +491,30 @@ When a file approaches 300 lines, the logic should be split into smaller helper 
 
 Tests use Vitest with `@vitest/coverage-v8`. Services are tested via Inversify container wiring with mock adapters -- no network calls in unit tests. The same DI tokens used in production are bound to mock implementations.
 
+## Roadmap
+
+### Completed
+
+- [x] **Outlook mailbox backup** with delta sync, content-addressed deduplication, and attachment handling
+- [x] **Outlook mailbox restore** with original timestamps, folder structure, cross-mailbox support, and chunked attachment upload
+- [x] **CLI interface** -- backup, restore, verify, list, read, delete, and storage-check commands
+- [x] **S3 Object Lock / retention policies** -- GOVERNANCE and COMPLIANCE mode with storage-enforced immutability
+- [x] **Typed programmatic SDK** -- `m365-atlas/sdk` subpath with camelCase ES6 API for embedding in other applications
+- [x] **Repository docs** -- contributing guide, issue/PR templates, code conventions
+
+### Up next
+
+- [ ] **Full documentation site** -- dedicated docs beyond the README with guides, API reference, and deployment examples
+- [ ] **Entra ID backup** -- back up Azure AD / Entra ID directory objects (users, groups, roles, policies)
+- [ ] **Entra ID restore** -- restore Entra ID objects from backup
+- [ ] **OneDrive backup** -- back up OneDrive files and folder structures with delta sync
+- [ ] **OneDrive restore** -- restore OneDrive files to the original or a different user
+- [ ] **SDK coverage for new services** -- expose Entra ID and OneDrive operations through `m365-atlas/sdk`
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup instructions, code conventions, architecture overview, and pull request guidelines.
+
 ## License
 
 Copyright 2026 Miika Oja-Kaukola

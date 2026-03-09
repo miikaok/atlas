@@ -1,0 +1,67 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug. Please fill out the sections below so we can reproduce and fix the issue.
+
+  - type: input
+    id: version
+    attributes:
+      label: Atlas version
+      description: Output of `atlas --version` or the package version in your `package.json`
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps or commands to reproduce the issue
+      placeholder: |
+        1. Run `atlas backup --mailbox user@example.com`
+        2. Observe error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      description: Paste any relevant terminal output or stack traces
+      render: text
+
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface
+      description: Were you using the CLI or the programmatic SDK?
+      options:
+        - CLI
+        - SDK (m365-atlas/sdk)
+        - Both
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Node.js version, OS, S3 backend (MinIO, AWS, etc.)
+      placeholder: |
+        - Node.js: 20.x
+        - OS: Ubuntu 24.04
+        - S3: MinIO (docker)
+    validations:
+      required: true
