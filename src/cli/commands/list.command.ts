@@ -2,8 +2,8 @@ import type { Command } from 'commander';
 import type { Container } from 'inversify';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import { CatalogService } from '@/services/catalog.service';
-import type { MailboxSummary } from '@/services/catalog.service';
+import type { CatalogUseCase, MailboxSummary } from '@/ports/catalog-use-case.port';
+import { CATALOG_USE_CASE_TOKEN } from '@/ports/catalog-use-case.port';
 import type { Manifest } from '@/domain/manifest';
 import { logger } from '@/utils/logger';
 
@@ -38,7 +38,7 @@ async function execute_list(container: Container, options: ListOptions): Promise
   logger.banner('Atlas List');
   logger.info(`Tenant: ${tenant_id}`);
 
-  const catalog = container.get(CatalogService);
+  const catalog = container.get<CatalogUseCase>(CATALOG_USE_CASE_TOKEN);
 
   if (options.snapshot) {
     await print_snapshot_messages(
@@ -66,7 +66,7 @@ function resolve_tenant_id(container: Container, options: ListOptions): string {
 // ---------------------------------------------------------------------------
 
 /** Prints a table of all backed-up mailboxes with summary stats. */
-async function print_all_mailboxes(catalog: CatalogService, tenant_id: string): Promise<void> {
+async function print_all_mailboxes(catalog: CatalogUseCase, tenant_id: string): Promise<void> {
   const mailboxes = await catalog.list_mailboxes(tenant_id);
 
   if (mailboxes.length === 0) {
@@ -108,7 +108,7 @@ function print_mailbox_table(mailboxes: MailboxSummary[]): void {
 
 /** Prints all snapshots for a given mailbox, sorted newest-first. */
 async function print_mailbox_snapshots(
-  catalog: CatalogService,
+  catalog: CatalogUseCase,
   tenant_id: string,
   mailbox_id: string,
 ): Promise<void> {
@@ -146,7 +146,7 @@ function print_snapshot_table(snapshots: Manifest[]): void {
 
 /** Prints the messages inside one snapshot, capped at 50 unless --all. */
 async function print_snapshot_messages(
-  catalog: CatalogService,
+  catalog: CatalogUseCase,
   tenant_id: string,
   snapshot_id: string,
   show_all?: boolean,

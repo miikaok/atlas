@@ -50,10 +50,34 @@ function handle_fatal_error(err: unknown): void {
     if (graph_err.statusCode) logger.info(`  HTTP status: ${graph_err.statusCode}`);
     if (graph_err.code) logger.info(`  Error code: ${graph_err.code}`);
     if (graph_err.body) logger.info(`  Body: ${JSON.stringify(graph_err.body)}`);
+    log_s3_connection_hint(graph_err, message);
     if (graph_err.stack && process.env.DEBUG) logger.info(String(graph_err.stack));
   }
 
   process.exitCode = 1;
+}
+
+function log_s3_connection_hint(err: Record<string, unknown>, message: string): void {
+  const code = String(err.code ?? '');
+  const lower_message = message.toLowerCase();
+  const is_connection_error =
+    code === 'ECONNREFUSED' ||
+    code === 'ENOTFOUND' ||
+    code === 'ETIMEDOUT' ||
+    lower_message.includes('econnrefused') ||
+    lower_message.includes('connect') ||
+    lower_message.includes('socket hang up');
+
+  if (!is_connection_error) return;
+
+  const endpoint = process.env.ATLAS_S3_ENDPOINT;
+  const endpoint_text = endpoint ? `"${endpoint}"` : 'ATLAS_S3_ENDPOINT';
+
+  logger.error(
+    `Cannot connect to S3 endpoint ${endpoint_text}. ` +
+      `Check that your S3/MinIO service is running and reachable.`,
+  );
+  logger.info('  If using local MinIO: cd docker && docker compose up -d');
 }
 
 const program = create_program();

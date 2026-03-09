@@ -3,23 +3,15 @@ import type { TenantContextFactory } from '@/ports/tenant-context.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
 import type { ManifestRepository } from '@/ports/manifest-repository.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
-import type { Manifest, AttachmentEntry } from '@/domain/manifest';
-
-export interface MailboxSummary {
-  readonly mailbox_id: string;
-  readonly snapshot_count: number;
-  readonly total_objects: number;
-  readonly total_size_bytes: number;
-  readonly last_backup_at: Date;
-}
-
-export interface ReadMessageResult {
-  readonly message: Record<string, unknown>;
-  readonly attachments: AttachmentEntry[];
-}
+import type { Manifest } from '@/domain/manifest';
+import type {
+  MailboxSummary,
+  ReadMessageResult,
+  CatalogUseCase,
+} from '@/ports/catalog-use-case.port';
 
 @injectable()
-export class CatalogService {
+export class CatalogService implements CatalogUseCase {
   constructor(
     @inject(TENANT_CONTEXT_FACTORY_TOKEN) private readonly _tenant_factory: TenantContextFactory,
     @inject(MANIFEST_REPOSITORY_TOKEN) private readonly _manifests: ManifestRepository,
@@ -81,7 +73,7 @@ export class CatalogService {
   }
 
   /** Resolves a manifest entry by 1-based index or by object_id. */
-  private resolve_entry(manifest: Manifest, ref: string) {
+  private resolve_entry(manifest: Manifest, ref: string): Manifest['entries'][number] | undefined {
     const index = Number(ref);
     if (Number.isInteger(index) && index >= 1) {
       return manifest.entries[index - 1];

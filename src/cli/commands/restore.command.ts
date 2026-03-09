@@ -3,8 +3,8 @@ import chalk from 'chalk';
 import type { Container } from 'inversify';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import { RestoreService } from '@/services/restore.service';
-import type { RestoreResult, RestoreOptions } from '@/services/restore.service';
+import type { RestoreUseCase, RestoreResult, RestoreOptions } from '@/ports/restore-use-case.port';
+import { RESTORE_USE_CASE_TOKEN } from '@/ports/restore-use-case.port';
 import { logger } from '@/utils/logger';
 
 type ContainerFactory = () => Container;
@@ -74,7 +74,7 @@ function parse_date(value: string, label: string): Date {
 /** Runs the restore operation and logs the outcome. */
 async function execute_restore(container: Container, options: CliRestoreOptions): Promise<void> {
   const tenant_id = resolve_tenant_id(container, options);
-  const restore_service = container.get(RestoreService);
+  const restore_service = container.get<RestoreUseCase>(RESTORE_USE_CASE_TOKEN);
 
   logger.banner('Atlas Restore');
   logger.info(`Tenant:  ${tenant_id}`);
@@ -93,7 +93,7 @@ async function execute_restore(container: Container, options: CliRestoreOptions)
 
 /** Snapshot-mode restore: restore from a single snapshot. */
 async function execute_snapshot_restore(
-  service: RestoreService,
+  service: RestoreUseCase,
   tenant_id: string,
   options: CliRestoreOptions,
 ): Promise<void> {
@@ -114,7 +114,7 @@ async function execute_snapshot_restore(
 
 /** Mailbox-mode restore: aggregate all snapshots for a mailbox. */
 async function execute_mailbox_restore(
-  service: RestoreService,
+  service: RestoreUseCase,
   tenant_id: string,
   options: CliRestoreOptions,
 ): Promise<void> {

@@ -6,16 +6,10 @@ import type { TenantContext } from '@/ports/tenant-context.port';
 import type { ManifestRepository } from '@/ports/manifest-repository.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
-
-export interface VerificationResult {
-  readonly snapshot_id: string;
-  readonly total_checked: number;
-  readonly passed: number;
-  readonly failed: string[];
-}
+import type { VerificationResult, VerificationUseCase } from '@/ports/verification-use-case.port';
 
 @injectable()
-export class VerificationService {
+export class VerificationService implements VerificationUseCase {
   constructor(
     @inject(TENANT_CONTEXT_FACTORY_TOKEN) private readonly _tenant_factory: TenantContextFactory,
     @inject(MANIFEST_REPOSITORY_TOKEN) private readonly _manifests: ManifestRepository,

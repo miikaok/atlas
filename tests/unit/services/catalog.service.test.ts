@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Container } from 'inversify';
 import 'reflect-metadata';
-import { CatalogService } from '@/services/catalog.service';
+import { CatalogService } from '@/services/catalog/catalog.service';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
 import type { ManifestRepository } from '@/ports/manifest-repository.port';

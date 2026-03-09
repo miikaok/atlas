@@ -3,14 +3,10 @@ import type { TenantContextFactory } from '@/ports/tenant-context.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
 import type { ManifestRepository } from '@/ports/manifest-repository.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
-
-export interface DeletionResult {
-  readonly deleted_objects: number;
-  readonly deleted_manifests: number;
-}
+import type { DeletionResult, DeletionUseCase } from '@/ports/deletion-use-case.port';
 
 @injectable()
-export class DeletionService {
+export class DeletionService implements DeletionUseCase {
   constructor(
     @inject(TENANT_CONTEXT_FACTORY_TOKEN) private readonly _tenant_factory: TenantContextFactory,
     @inject(MANIFEST_REPOSITORY_TOKEN) private readonly _manifests: ManifestRepository,

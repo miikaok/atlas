@@ -4,8 +4,8 @@ import type { Container } from 'inversify';
 import chalk from 'chalk';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import { DeletionService } from '@/services/deletion.service';
-import type { DeletionResult } from '@/services/deletion.service';
+import type { DeletionUseCase, DeletionResult } from '@/ports/deletion-use-case.port';
+import { DELETION_USE_CASE_TOKEN } from '@/ports/deletion-use-case.port';
 import { logger } from '@/utils/logger';
 
 type ContainerFactory = () => Container;
@@ -53,7 +53,7 @@ async function execute_delete(container: Container, options: DeleteOptions): Pro
     }
   }
 
-  const deletion = container.get(DeletionService);
+  const deletion = container.get<DeletionUseCase>(DELETION_USE_CASE_TOKEN);
   const result = await dispatch_deletion(deletion, scope, tenant_id, options);
   print_result(result);
 }
@@ -92,7 +92,7 @@ function determine_scope(
 
 /** Dispatches to the correct DeletionService method. */
 async function dispatch_deletion(
-  deletion: DeletionService,
+  deletion: DeletionUseCase,
   scope: DeleteScope,
   tenant_id: string,
   options: DeleteOptions,

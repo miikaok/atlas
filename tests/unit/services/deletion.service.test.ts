@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Container } from 'inversify';
 import 'reflect-metadata';
-import { DeletionService } from '@/services/deletion.service';
+import { DeletionService } from '@/services/deletion/deletion.service';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
 import type { ManifestRepository } from '@/ports/manifest-repository.port';

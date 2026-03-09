@@ -2,8 +2,9 @@ import type { Command } from 'commander';
 import type { Container } from 'inversify';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import { MailboxSyncService } from '@/services/mailbox-sync.service';
-import type { SyncOptions } from '@/services/mailbox-sync.service';
+import type { BackupUseCase, SyncOptions } from '@/ports/backup-use-case.port';
+import { BACKUP_USE_CASE_TOKEN } from '@/ports/backup-use-case.port';
+import { run_backup_with_cli_adapter } from '@/cli/adapters/backup-operation.adapter';
 import { logger } from '@/utils/logger';
 
 type ContainerFactory = () => Container;
@@ -72,8 +73,13 @@ async function backup_single_mailbox(
   sync_options: SyncOptions,
 ): Promise<void> {
   logger.info(`Mailbox: ${mailbox_id}`);
-  const sync_service = container.get(MailboxSyncService);
-  const result = await sync_service.sync_mailbox(tenant_id, mailbox_id, sync_options);
+  const backup_use_case = container.get<BackupUseCase>(BACKUP_USE_CASE_TOKEN);
+  const result = await run_backup_with_cli_adapter(
+    backup_use_case,
+    tenant_id,
+    mailbox_id,
+    sync_options,
+  );
   logger.success(
     `Snapshot ${result.snapshot.id} -- ` +
       `${result.manifest.total_objects} objects, ` +

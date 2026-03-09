@@ -81,14 +81,6 @@ export function group_entries_by_folder(entries: ManifestEntry[]): Map<string, M
 }
 
 /**
- * Resolves the folder_id for a manifest entry. Uses the stored field
- * when present; otherwise decrypts the message to extract parentFolderId.
- */
-export function resolve_folder_id_from_json(message_json: Record<string, unknown>): string {
-  return (message_json['parentFolderId'] as string) ?? '__unknown__';
-}
-
-/**
  * Filters entries belonging to a specific folder by display name.
  * Looks up the folder_id from the folder map, then filters entries.
  */

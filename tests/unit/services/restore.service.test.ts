@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Container } from 'inversify';
 import 'reflect-metadata';
-import { RestoreService } from '@/services/restore.service';
+import { RestoreService } from '@/services/restore/restore.service';
 import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
 import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
 import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';

@@ -3,8 +3,8 @@ import chalk from 'chalk';
 import type { Container } from 'inversify';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import { VerificationService } from '@/services/verification.service';
-import type { VerificationResult } from '@/services/verification.service';
+import type { VerificationUseCase, VerificationResult } from '@/ports/verification-use-case.port';
+import { VERIFICATION_USE_CASE_TOKEN } from '@/ports/verification-use-case.port';
 import { logger } from '@/utils/logger';
 
 type ContainerFactory = () => Container;
@@ -37,8 +37,8 @@ async function execute_verify(container: Container, options: VerifyOptions): Pro
   logger.banner('Atlas Verify');
   logger.info(`Verifying snapshot ${chalk.cyan(options.snapshot)}...`);
 
-  const verification_service = container.get(VerificationService);
-  const result = await verification_service.verify_snapshot_integrity(tenant_id, options.snapshot);
+  const verification_use_case = container.get<VerificationUseCase>(VERIFICATION_USE_CASE_TOKEN);
+  const result = await verification_use_case.verify_snapshot_integrity(tenant_id, options.snapshot);
   report_verification_result(result);
 }
 

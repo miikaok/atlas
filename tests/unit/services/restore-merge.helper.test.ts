@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { merge_snapshot_entries, filter_manifests_by_date } from '@/services/restore-merge.helper';
+import {
+  merge_snapshot_entries,
+  filter_manifests_by_date,
+} from '@/services/restore/manifest-entry-merger';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
 
 function make_entry(id: string, folder_id = 'f1'): ManifestEntry {

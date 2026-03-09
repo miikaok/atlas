@@ -34,7 +34,7 @@ Key enforced rules:
 
 ## The 300-Line Rule
 
-When a file approaches or exceeds 300 lines, **split the logic** into separate files. Do not compact, minify, or remove whitespace to fit. The limit exists to enforce proper separation of concerns. Extract cohesive blocks into helper files (e.g. `attachment-sync.helper.ts`, `graph-error-helpers.ts`).
+When a file approaches or exceeds 300 lines, **split the logic** into separate files. Do not compact, minify, or remove whitespace to fit. The limit exists to enforce proper separation of concerns. Extract cohesive blocks into purpose-named modules (e.g. `attachment-storage-sync.ts`, `manifest-entry-merger.ts`) rather than generic `helper` files.
 
 ## Function Design (SRP)
 
@@ -75,16 +75,26 @@ The project follows hexagonal architecture with Inversify for dependency injecti
 ```
 src/
   domain/       Pure data models, no dependencies
-  ports/        Interfaces (dependency inversion boundaries)
-  services/     Business logic, depends only on ports
+  ports/        Interfaces and tokens (input + output ports)
+  services/     Application logic, depends only on ports
+    backup/
+    restore/
+    verification/
+    catalog/
+    deletion/
+    shared/
   adapters/     Concrete implementations of ports
-  cli/          CLI command handlers, no business logic
+  cli/          Incoming adapters (commands, presenters, signal handling)
   utils/        Small helpers (logging, config)
 ```
 
-- **Services** depend on **port interfaces**, never on adapter implementations.
+- **Services** depend on **port interfaces**, never on adapter implementations or CLI concerns.
 - **Adapters** implement port interfaces and are bound in `container.ts`.
-- **CLI commands** resolve services from the DI container and delegate.
+- **CLI commands** resolve **incoming use-case ports** from the DI container and delegate.
+- Presentation/runtime concerns (`chalk`, dashboards, signal handling, process control) belong in CLI adapters/presenters, not application services.
+- Keep `src/services/` organized by deterministic capability subfolders; avoid root-level sprawl.
+- Do not use ambiguous `*.helper.ts` names in services. Use behavior-revealing names (e.g. `folder-sync-executor.ts`, `restore-message-transformer.ts`).
+- Keep root public exports core-only; do not re-export infrastructure adapters from `src/index.ts`.
 - All injectable classes use `@injectable()` and `@inject()` decorators.
 
 ## Testing

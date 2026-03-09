@@ -3,20 +3,20 @@ import type { TenantContext } from '@/ports/tenant-context.port';
 import type { MailboxConnector } from '@/ports/mailbox-connector.port';
 import type { RestoreConnector } from '@/ports/restore-connector.port';
 import type { ManifestEntry } from '@/domain/manifest';
-import type { RestoreResult } from '@/services/restore.service';
+import type { RestoreResult } from '@/ports/restore-use-case.port';
 import {
   decrypt_and_parse_message,
   sanitize_message_for_restore,
   extract_folder_id_from_json,
-} from '@/services/restore-message.helper';
-import { restore_entry_attachments } from '@/services/restore-attachment.helper';
+} from '@/services/restore/restore-message-transformer';
+import { restore_entry_attachments } from '@/services/restore/restore-attachment-writer';
 import {
   build_folder_map,
   create_restore_root,
   ensure_subfolder,
-} from '@/services/restore-folder.helper';
-import type { RestoreDashboard } from '@/services/restore-dashboard';
-import { calc_rate } from '@/services/sync-progress.helper';
+} from '@/services/restore/folder-restore-planner';
+import type { RestoreProgressDashboard } from '@/services/restore/restore-progress-dashboard';
+import { calc_rate } from '@/services/shared/progress-rate';
 import { logger } from '@/utils/logger';
 
 /** Decrypts, sanitizes, creates one message via Graph, then uploads attachments. */
@@ -65,11 +65,11 @@ export async function restore_folder_entries(
   global_before: number,
   global_total: number,
   start: number,
-  dashboard: RestoreDashboard,
+  dashboard: RestoreProgressDashboard,
   is_interrupted: () => boolean,
 ): Promise<{ restored: number; attachments: number; errors: string[] }> {
-  let restored = 0,
-    attachments = 0;
+  let restored = 0;
+  let attachments = 0;
   const errors: string[] = [];
 
   for (const entry of entries) {

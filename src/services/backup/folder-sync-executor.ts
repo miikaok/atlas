@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 import type { TenantContext } from '@/ports/tenant-context.port';
 import type { MailboxConnector, MailMessage } from '@/ports/mailbox-connector.port';
 import type { ManifestEntry } from '@/domain/manifest';
-import { fetch_and_store_attachments } from '@/services/attachment-sync.helper';
-import { calc_rate } from '@/services/sync-progress.helper';
-import type { BackupDashboard } from '@/services/backup-dashboard';
+import { fetch_and_store_attachments } from '@/services/backup/attachment-storage-sync';
+import { calc_rate } from '@/services/shared/progress-rate';
+import type { BackupProgressReporter } from '@/ports/backup-use-case.port';
 
 export interface FolderSyncResult {
   entries: ManifestEntry[];
@@ -26,13 +26,11 @@ export interface FolderSyncParams {
   global_total: number;
   global_processed_before: number;
   sync_start: number;
-  dashboard: BackupDashboard;
+  progress: BackupProgressReporter;
   is_interrupted: () => boolean;
-  /** When true, abort paging immediately (second Ctrl+C). */
   is_hard_stopped: () => boolean;
   prev_delta_link?: string;
   previous_manifest_entries?: number;
-  /** Graph API page size for delta requests. */
   page_size?: number;
 }
 
@@ -73,7 +71,7 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
     global_total,
     global_processed_before,
     sync_start,
-    dashboard,
+    progress,
     is_interrupted,
     is_hard_stopped,
     prev_delta_link,
@@ -101,7 +99,7 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
     const page_rate = calc_rate(total_items, elapsed_ms);
     const remaining = global_total - global_processed_before - total_items;
     const eta = page_rate > 0 ? remaining / page_rate : 0;
-    dashboard.update_paging(folder_index, total_items, page_rate, eta);
+    progress.update_paging(folder_index, total_items, page_rate, eta);
 
     if (is_interrupted()) return true;
 
@@ -112,8 +110,8 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
       const gp = global_processed_before + folder_processed;
       const rate = calc_rate(gp, Date.now() - sync_start);
       const msg_eta = rate > 0 ? (global_total - gp) / rate : 0;
-      dashboard.update_total(gp, global_total, rate, msg_eta);
-      dashboard.update_active(folder_index, folder_processed, rate, msg_eta);
+      progress.update_total(gp, global_total, rate, msg_eta);
+      progress.update_active(folder_index, folder_processed, rate, msg_eta);
     }
 
     return true;
@@ -153,8 +151,8 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
       const gp = global_processed_before + folder_processed;
       const rate = calc_rate(gp, Date.now() - sync_start);
       const eta = rate > 0 ? (global_total - gp) / rate : 0;
-      dashboard.update_total(gp, global_total, rate, eta);
-      dashboard.update_active(folder_index, folder_processed, rate, eta);
+      progress.update_total(gp, global_total, rate, eta);
+      progress.update_active(folder_index, folder_processed, rate, eta);
     }
   }
 

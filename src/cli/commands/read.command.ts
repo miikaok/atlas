@@ -3,7 +3,8 @@ import type { Container } from 'inversify';
 import chalk from 'chalk';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import { CatalogService } from '@/services/catalog.service';
+import type { CatalogUseCase } from '@/ports/catalog-use-case.port';
+import { CATALOG_USE_CASE_TOKEN } from '@/ports/catalog-use-case.port';
 import type { AttachmentEntry } from '@/domain/manifest';
 import { logger } from '@/utils/logger';
 
@@ -33,7 +34,7 @@ async function execute_read(container: Container, options: ReadOptions): Promise
   const tenant_id = resolve_tenant_id(container, options);
   logger.banner('Atlas Read');
 
-  const catalog = container.get(CatalogService);
+  const catalog = container.get<CatalogUseCase>(CATALOG_USE_CASE_TOKEN);
   const result = await catalog.read_message(tenant_id, options.snapshot, options.message);
 
   if (!result) {

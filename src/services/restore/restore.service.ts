@@ -16,37 +16,24 @@ import {
   group_entries_by_folder,
   filter_entries_by_folder_name,
   count_unique_folders,
-} from '@/services/restore-folder.helper';
-import { filter_manifests_by_date, merge_snapshot_entries } from '@/services/restore-merge.helper';
+} from '@/services/restore/folder-restore-planner';
+import {
+  filter_manifests_by_date,
+  merge_snapshot_entries,
+} from '@/services/restore/manifest-entry-merger';
 import {
   restore_single_message,
   restore_folder_entries,
   backfill_missing_folder_ids,
   log_restore_summary,
-} from '@/services/restore-execution.helper';
-import { RestoreDashboard } from '@/services/restore-dashboard';
-import { calc_rate } from '@/services/sync-progress.helper';
+} from '@/services/restore/restore-execution-orchestrator';
+import { RestoreProgressDashboard } from '@/services/restore/restore-progress-dashboard';
+import { calc_rate } from '@/services/shared/progress-rate';
 import { logger } from '@/utils/logger';
-
-export interface RestoreResult {
-  readonly snapshot_id: string;
-  readonly restored_count: number;
-  readonly attachment_count: number;
-  readonly error_count: number;
-  readonly errors: string[];
-  readonly restore_folder_name: string;
-}
-
-export interface RestoreOptions {
-  readonly folder_name?: string;
-  readonly message_ref?: string;
-  readonly target_mailbox?: string;
-  readonly start_date?: Date;
-  readonly end_date?: Date;
-}
+import type { RestoreUseCase, RestoreResult, RestoreOptions } from '@/ports/restore-use-case.port';
 
 @injectable()
-export class RestoreService {
+export class RestoreService implements RestoreUseCase {
   private _interrupted = false;
 
   constructor(
@@ -216,7 +203,7 @@ export class RestoreService {
         `${count_unique_folders(entries)} folders into ${root.display_name}`,
     );
 
-    const dashboard = new RestoreDashboard(
+    const dashboard = new RestoreProgressDashboard(
       [...groups.entries()].map(([fid, items]) => ({
         name: folder_map.get(fid) ?? fid.slice(0, 12),
         total_items: items.length,
@@ -246,11 +233,11 @@ export class RestoreService {
     groups: Map<string, ManifestEntry[]>,
     folder_map: Map<string, string>,
     created_folders: Map<string, string>,
-    dashboard: RestoreDashboard,
+    dashboard: RestoreProgressDashboard,
   ): Promise<RestoreResult> {
-    let global_restored = 0,
-      global_att = 0,
-      global_errors = 0;
+    let global_restored = 0;
+    let global_att = 0;
+    let global_errors = 0;
     const all_errors: string[] = [];
     const start = Date.now();
     const global_total = [...groups.values()].reduce((s, g) => s + g.length, 0);
@@ -322,6 +309,7 @@ export class RestoreService {
       process.removeListener('SIGINT', on_sigint);
     }
   }
+
   private empty_result(snapshot_id: string): RestoreResult {
     return {
       snapshot_id,
