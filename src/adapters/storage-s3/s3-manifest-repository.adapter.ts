@@ -2,6 +2,7 @@ import { injectable } from 'inversify';
 import type { Manifest } from '@/domain/manifest';
 import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
 import type { TenantContext } from '@/ports/tenant/context.port';
+import type { StorageObjectLockPolicy } from '@/ports/storage/object-storage.port';
 
 const MANIFEST_PREFIX = 'manifests';
 
@@ -21,7 +22,8 @@ export class S3ManifestRepository implements ManifestRepository {
     const key = manifest_key(manifest.mailbox_id, manifest.snapshot_id);
     const json = Buffer.from(JSON.stringify(manifest));
     const encrypted = ctx.encrypt(json);
-    await ctx.storage.put(key, encrypted);
+    const object_lock_policy = to_storage_object_lock_policy(manifest);
+    await ctx.storage.put(key, encrypted, undefined, object_lock_policy);
   }
 
   /** Searches all mailbox prefixes for a manifest matching the snapshot ID. */
@@ -89,4 +91,15 @@ export class S3ManifestRepository implements ManifestRepository {
       return undefined;
     }
   }
+}
+
+function to_storage_object_lock_policy(manifest: Manifest): StorageObjectLockPolicy | undefined {
+  if (!manifest.object_lock?.effective) return undefined;
+  const effective = manifest.object_lock.effective;
+  if (!effective.legal_hold && !effective.retain_until) return undefined;
+  return {
+    mode: effective.mode,
+    retain_until: effective.retain_until,
+    legal_hold: effective.legal_hold,
+  };
 }

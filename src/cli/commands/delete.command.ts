@@ -135,7 +135,11 @@ function resolve_tenant_id(container: Container, options: DeleteOptions): string
 
 /** Prints a summary of what was deleted. */
 function print_result(result: DeletionResult): void {
-  if (result.deleted_objects === 0 && result.deleted_manifests === 0) {
+  const no_deleted = result.deleted_objects === 0 && result.deleted_manifests === 0;
+  const no_retained = result.retained_objects === 0 && result.retained_manifests === 0;
+  const no_failed = result.failed_objects === 0 && result.failed_manifests === 0;
+
+  if (no_deleted && no_retained && no_failed) {
     logger.warn('Nothing to delete');
     return;
   }
@@ -143,4 +147,16 @@ function print_result(result: DeletionResult): void {
   logger.success(
     `Deleted ${result.deleted_objects} object(s), ${result.deleted_manifests} manifest(s)`,
   );
+  logger.info(
+    `Retained and not deleted: ${result.retained_objects} object(s), ` +
+      `${result.retained_manifests} manifest(s)`,
+  );
+  logger.info(
+    `Failed for other reasons: ${result.failed_objects} object(s), ` +
+      `${result.failed_manifests} manifest(s)`,
+  );
+
+  if (!no_retained || !no_failed) {
+    process.exitCode = 1;
+  }
 }

@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { S3ObjectStorage } from '@/adapters/storage-s3/s3-object-storage.adapter';
+import { reset_bucket_cache } from '@/adapters/storage-s3/s3-bucket-manager';
+import {
+  ObjectLockUnsupportedError,
+  ObjectLockVersioningDisabledError,
+} from '@/adapters/storage-s3/object-lock.errors';
 
-function make_mock_s3() {
+function make_mock_s3(): { send: ReturnType<typeof vi.fn> } {
   return { send: vi.fn() };
 }
 
@@ -13,6 +18,7 @@ describe('S3ObjectStorage', () => {
   beforeEach(() => {
     mock_s3 = make_mock_s3();
     storage = new S3ObjectStorage(mock_s3 as never, bucket);
+    reset_bucket_cache();
   });
 
   describe('put', () => {
@@ -41,6 +47,53 @@ describe('S3ObjectStorage', () => {
 
       const cmd = mock_s3.send.mock.calls[0][0];
       expect(cmd.input.ContentMD5).toBe(expected_md5);
+    });
+
+    it('applies object lock options for immutable upload', async () => {
+      mock_s3.send
+        .mockResolvedValueOnce({}) // HeadBucket
+        .mockResolvedValueOnce({ Status: 'Enabled' }) // GetBucketVersioning
+        .mockResolvedValueOnce({ ObjectLockConfiguration: { ObjectLockEnabled: 'Enabled' } }) // GetObjectLockConfiguration
+        .mockResolvedValueOnce({}); // PutObject
+
+      await storage.put('immutable', Buffer.from('body'), undefined, {
+        mode: 'GOVERNANCE',
+        retain_until: '2026-04-08T12:00:00.000Z',
+        legal_hold: true,
+      });
+
+      const cmd = mock_s3.send.mock.calls.at(-1)?.[0];
+      expect(cmd.input.ObjectLockMode).toBe('GOVERNANCE');
+      expect(cmd.input.ObjectLockRetainUntilDate).toBeInstanceOf(Date);
+      expect(cmd.input.ObjectLockLegalHoldStatus).toBe('ON');
+    });
+
+    it('fails with versioning-specific error when immutability requested and versioning is disabled', async () => {
+      mock_s3.send
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ Status: 'Suspended' })
+        .mockResolvedValueOnce({ ObjectLockConfiguration: { ObjectLockEnabled: 'Enabled' } });
+
+      await expect(
+        storage.put('immutable', Buffer.from('body'), undefined, {
+          mode: 'GOVERNANCE',
+          retain_until: '2026-04-08T12:00:00.000Z',
+        }),
+      ).rejects.toBeInstanceOf(ObjectLockVersioningDisabledError);
+    });
+
+    it('fails with object-lock-specific error when object lock is disabled', async () => {
+      mock_s3.send
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ Status: 'Enabled' })
+        .mockResolvedValueOnce({ ObjectLockConfiguration: { ObjectLockEnabled: 'Disabled' } });
+
+      await expect(
+        storage.put('immutable', Buffer.from('body'), undefined, {
+          mode: 'GOVERNANCE',
+          retain_until: '2026-04-08T12:00:00.000Z',
+        }),
+      ).rejects.toBeInstanceOf(ObjectLockUnsupportedError);
     });
   });
 
@@ -120,6 +173,22 @@ describe('S3ObjectStorage', () => {
     it('returns empty array when no contents', async () => {
       mock_s3.send.mockResolvedValueOnce({ Contents: undefined });
       expect(await storage.list('x')).toEqual([]);
+    });
+  });
+
+  describe('probe_immutability', () => {
+    it('uses cached probe result per bucket', async () => {
+      mock_s3.send
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ Status: 'Enabled' })
+        .mockResolvedValueOnce({ ObjectLockConfiguration: { ObjectLockEnabled: 'Enabled' } });
+
+      const first = await storage.probe_immutability({ mode: 'GOVERNANCE' });
+      const second = await storage.probe_immutability({ mode: 'GOVERNANCE' });
+
+      expect(first.object_lock_enabled).toBe(true);
+      expect(second.object_lock_enabled).toBe(true);
+      expect(mock_s3.send).toHaveBeenCalledTimes(3);
     });
   });
 });

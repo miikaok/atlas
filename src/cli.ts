@@ -9,6 +9,7 @@ import { register_restore_command } from '@/cli/commands/restore.command';
 import { register_list_command } from '@/cli/commands/list.command';
 import { register_read_command } from '@/cli/commands/read.command';
 import { register_delete_command } from '@/cli/commands/delete.command';
+import { register_storage_check_command } from '@/cli/commands/storage-check.command';
 import { logger } from '@/utils/logger';
 import type { Container } from 'inversify';
 
@@ -38,6 +39,7 @@ function register_commands(program: Command): void {
   register_list_command(program, get_container);
   register_read_command(program, get_container);
   register_delete_command(program, get_container);
+  register_storage_check_command(program, get_container);
 }
 
 /** Handles top-level unhandled errors from command execution. */

@@ -38,8 +38,17 @@ function make_mock_storage(): ObjectStorage {
     put: vi.fn(),
     get: vi.fn(),
     delete: vi.fn(),
+    delete_version: vi.fn(),
     exists: vi.fn().mockResolvedValue(false),
     list: vi.fn().mockResolvedValue([]),
+    list_versions: vi.fn().mockResolvedValue([]),
+    probe_immutability: vi.fn().mockResolvedValue({
+      bucket: 'test-bucket',
+      reachable: true,
+      versioning_enabled: true,
+      object_lock_enabled: true,
+      mode_supported: true,
+    }),
   };
 }
 
@@ -279,5 +288,37 @@ describe('MailboxSyncService – attachment backup', () => {
     expect(result.manifest.entries[0]!.attachments![0]!.name).toBe('a.pdf');
     expect(result.manifest.entries[0]!.attachments![1]!.name).toBe('b.png');
     expect(result.manifest.entries[0]!.attachments![1]!.is_inline).toBe(true);
+  });
+
+  it('passes object lock policy to newly uploaded attachments', async () => {
+    const msg = make_message('msg-lock', 'body', true);
+    vi.mocked(mock_connector.fetch_delta).mockResolvedValue(make_delta([msg]));
+    vi.mocked(mock_connector.fetch_attachments).mockResolvedValue([
+      {
+        attachment_id: 'att-lock',
+        name: 'locked.bin',
+        content_type: 'application/octet-stream',
+        size_bytes: 8,
+        is_inline: false,
+        content: Buffer.from('lockdata'),
+      },
+    ]);
+
+    await service.sync_mailbox('t', 'user@test.com', {
+      object_lock_policy: {
+        mode: 'GOVERNANCE',
+        retain_until: '2026-04-08T12:00:00.000Z',
+        legal_hold: true,
+      },
+    });
+
+    const att_put = (mock_context.storage.put as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([key]: [string]) => key.startsWith('attachments/'),
+    );
+    expect(att_put?.[3]).toEqual({
+      mode: 'GOVERNANCE',
+      retain_until: '2026-04-08T12:00:00.000Z',
+      legal_hold: true,
+    });
   });
 });

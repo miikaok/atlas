@@ -47,8 +47,17 @@ function make_mock_storage(): ObjectStorage {
     put: vi.fn(),
     get: vi.fn(),
     delete: vi.fn(),
+    delete_version: vi.fn(),
     exists: vi.fn().mockResolvedValue(false),
     list: vi.fn().mockResolvedValue([]),
+    list_versions: vi.fn().mockResolvedValue([]),
+    probe_immutability: vi.fn().mockResolvedValue({
+      bucket: 'test-bucket',
+      reachable: true,
+      versioning_enabled: true,
+      object_lock_enabled: true,
+      mode_supported: true,
+    }),
   };
 }
 

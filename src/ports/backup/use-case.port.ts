@@ -2,6 +2,20 @@ import type { Manifest } from '@/domain/manifest';
 import type { Snapshot } from '@/domain/snapshot';
 
 export type BackupSyncMode = 'full' | 'incremental' | 'initial';
+export type ObjectLockMode = 'GOVERNANCE' | 'COMPLIANCE';
+
+export interface ObjectLockPolicy {
+  readonly mode?: ObjectLockMode | undefined;
+  readonly retain_until?: string | undefined;
+  readonly legal_hold?: boolean | undefined;
+  readonly require_immutability?: boolean | undefined;
+}
+
+export interface ObjectLockRequest {
+  readonly mode?: ObjectLockMode | undefined;
+  readonly retention_days?: number | undefined;
+  readonly legal_hold?: boolean | undefined;
+}
 
 export interface BackupProgressReporter {
   set_status(message: string): void;
@@ -24,6 +38,8 @@ export interface SyncOptions {
   readonly folder_filter?: string[] | undefined;
   readonly force_full?: boolean | undefined;
   readonly page_size?: number | undefined;
+  readonly object_lock_policy?: ObjectLockPolicy | undefined;
+  readonly object_lock_request?: ObjectLockRequest | undefined;
   readonly progress?: BackupProgressReporter | undefined;
   readonly create_progress?:
     | ((folders: { name: string; total_items: number }[]) => BackupProgressReporter)

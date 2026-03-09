@@ -31,8 +31,17 @@ function make_mock_storage(): ObjectStorage {
     put: vi.fn(),
     get: vi.fn(),
     delete: vi.fn(),
+    delete_version: vi.fn(),
     exists: vi.fn().mockResolvedValue(false),
     list: vi.fn().mockResolvedValue([]),
+    list_versions: vi.fn().mockResolvedValue([]),
+    probe_immutability: vi.fn().mockResolvedValue({
+      bucket: 'test-bucket',
+      reachable: true,
+      versioning_enabled: true,
+      object_lock_enabled: true,
+      mode_supported: true,
+    }),
   };
 }
 
@@ -89,6 +98,10 @@ describe('DeletionService', () => {
 
       expect(result.deleted_objects).toBe(3);
       expect(result.deleted_manifests).toBe(1);
+      expect(result.retained_objects).toBe(0);
+      expect(result.retained_manifests).toBe(0);
+      expect(result.failed_objects).toBe(0);
+      expect(result.failed_manifests).toBe(0);
       expect(mock_context.storage.delete).toHaveBeenCalledTimes(4);
       expect(mock_context.storage.delete).toHaveBeenCalledWith('data/user@test.com/aaa');
       expect(mock_context.storage.delete).toHaveBeenCalledWith('attachments/user@test.com/ccc');
@@ -110,6 +123,7 @@ describe('DeletionService', () => {
 
       expect(result.deleted_objects).toBe(0);
       expect(result.deleted_manifests).toBe(0);
+      expect(result.retained_objects).toBe(0);
       expect(mock_context.storage.delete).not.toHaveBeenCalled();
     });
   });
@@ -123,11 +137,15 @@ describe('DeletionService', () => {
       vi.mocked(mock_manifests.find_by_snapshot).mockResolvedValue(
         make_manifest({ mailbox_id: 'u@t.com', snapshot_id: 'snap-42' }),
       );
+      vi.mocked(mock_context.storage.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        'manifests/u@t.com/snap-42.json',
+      ]);
 
       const result = await service.delete_snapshot('t', 'snap-42');
 
       expect(result.deleted_manifests).toBe(1);
       expect(result.deleted_objects).toBe(0);
+      expect(result.retained_manifests).toBe(0);
       expect(mock_context.storage.delete).toHaveBeenCalledWith('manifests/u@t.com/snap-42.json');
     });
 
@@ -136,7 +154,26 @@ describe('DeletionService', () => {
 
       expect(result.deleted_objects).toBe(0);
       expect(result.deleted_manifests).toBe(0);
+      expect(result.failed_manifests).toBe(0);
       expect(mock_context.storage.delete).not.toHaveBeenCalled();
+    });
+
+    it('reports retained manifest when backend blocks delete with Object Lock', async () => {
+      vi.mocked(mock_manifests.find_by_snapshot).mockResolvedValue(
+        make_manifest({ mailbox_id: 'u@t.com', snapshot_id: 'snap-42' }),
+      );
+      vi.mocked(mock_context.storage.list as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+        'manifests/u@t.com/snap-42.json',
+      ]);
+      vi.mocked(mock_context.storage.delete as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error('AccessDenied: Object Lock retention in effect'),
+      );
+
+      const result = await service.delete_snapshot('t', 'snap-42');
+
+      expect(result.deleted_manifests).toBe(0);
+      expect(result.retained_manifests).toBe(1);
+      expect(result.failed_manifests).toBe(0);
     });
   });
 
@@ -157,6 +194,8 @@ describe('DeletionService', () => {
 
       expect(result.deleted_objects).toBe(4);
       expect(result.deleted_manifests).toBe(1);
+      expect(result.retained_objects).toBe(0);
+      expect(result.failed_manifests).toBe(0);
       expect(mock_context.storage.delete).toHaveBeenCalledTimes(5);
     });
 
@@ -174,6 +213,8 @@ describe('DeletionService', () => {
 
       expect(result.deleted_objects).toBe(0);
       expect(result.deleted_manifests).toBe(0);
+      expect(result.retained_objects).toBe(0);
+      expect(result.retained_manifests).toBe(0);
     });
   });
 });

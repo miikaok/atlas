@@ -2,7 +2,7 @@ import { inject, injectable } from 'inversify';
 import type { TenantContextFactory } from '@/ports/tenant/context.port';
 import type { MailboxConnector, MailFolder } from '@/ports/mailbox/connector.port';
 import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
-import type { ManifestEntry } from '@/domain/manifest';
+import type { ManifestEntry, ManifestObjectLockPolicy } from '@/domain/manifest';
 import { calc_rate } from '@/services/shared/progress-rate';
 import { sync_single_folder } from '@/services/backup/folder-sync-executor';
 import {
@@ -113,6 +113,7 @@ export class MailboxSyncService implements BackupUseCase {
           prev_delta_link: prev_link,
           previous_manifest_entries: previous_entry_count,
           page_size: options.page_size,
+          object_lock_policy: options.object_lock_policy,
         });
         all_entries.push(...result.entries);
         if (result.delta_link) {
@@ -150,6 +151,7 @@ export class MailboxSyncService implements BackupUseCase {
       all_entries,
       merged_links,
       previous_entry_count,
+      this.build_manifest_object_lock_policy(options),
     );
     await this._manifests.save(ctx, manifest);
 
@@ -169,6 +171,24 @@ export class MailboxSyncService implements BackupUseCase {
         completed_folder_count: Object.keys(new_delta_links).length,
         total_folder_count: folders.length,
         elapsed_ms: Date.now() - sync_start,
+      },
+    };
+  }
+
+  private build_manifest_object_lock_policy(
+    options: SyncOptions,
+  ): ManifestObjectLockPolicy | undefined {
+    if (!options.object_lock_policy) return undefined;
+    return {
+      requested: {
+        mode: options.object_lock_request?.mode,
+        retention_days: options.object_lock_request?.retention_days,
+        legal_hold: options.object_lock_request?.legal_hold ?? false,
+      },
+      effective: {
+        mode: options.object_lock_policy.mode,
+        retain_until: options.object_lock_policy.retain_until,
+        legal_hold: options.object_lock_policy.legal_hold ?? false,
       },
     };
   }

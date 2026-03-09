@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Snapshot } from '@/domain/snapshot';
 import { SnapshotStatus } from '@/domain/snapshot';
-import type { Manifest, ManifestEntry } from '@/domain/manifest';
+import type { Manifest, ManifestEntry, ManifestObjectLockPolicy } from '@/domain/manifest';
 
 /** Creates a snapshot record in IN_PROGRESS state. */
 export function create_pending_snapshot(tenant_id: string, mailbox_id: string): Snapshot {
@@ -36,6 +36,7 @@ export function build_manifest(
   entries: ManifestEntry[],
   delta_links: Record<string, string>,
   previous_total_objects = 0,
+  object_lock?: ManifestObjectLockPolicy,
 ): Manifest {
   const total_size_bytes = entries.reduce((sum, e) => {
     const att_size = e.attachments?.reduce((a, att) => a + att.size_bytes, 0) ?? 0;
@@ -50,6 +51,7 @@ export function build_manifest(
     total_objects: Math.max(entries.length, previous_total_objects),
     total_size_bytes,
     delta_links,
+    object_lock,
     entries,
   };
 }

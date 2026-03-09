@@ -1,3 +1,22 @@
+export type ManifestObjectLockMode = 'GOVERNANCE' | 'COMPLIANCE';
+
+export interface ManifestObjectLockRequestedPolicy {
+  readonly mode?: ManifestObjectLockMode | undefined;
+  readonly retention_days?: number | undefined;
+  readonly legal_hold?: boolean | undefined;
+}
+
+export interface ManifestObjectLockEffectivePolicy {
+  readonly mode?: ManifestObjectLockMode | undefined;
+  readonly retain_until?: string | undefined;
+  readonly legal_hold?: boolean | undefined;
+}
+
+export interface ManifestObjectLockPolicy {
+  readonly requested: ManifestObjectLockRequestedPolicy;
+  readonly effective: ManifestObjectLockEffectivePolicy;
+}
+
 export interface Manifest {
   readonly id: string;
   readonly tenant_id: string;
@@ -8,6 +27,7 @@ export interface Manifest {
   readonly total_size_bytes: number;
   /** Maps folder_id -> full @odata.deltaLink URL for the next incremental sync. */
   readonly delta_links: Record<string, string>;
+  readonly object_lock?: ManifestObjectLockPolicy;
   readonly entries: ManifestEntry[];
 }
 

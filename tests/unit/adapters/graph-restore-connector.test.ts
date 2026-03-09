@@ -4,7 +4,12 @@ import 'reflect-metadata';
 import { GraphRestoreConnector } from '@/adapters/m365/graph-restore-connector.adapter';
 import { GRAPH_CLIENT_TOKEN } from '@/adapters/m365/graph-client.factory';
 
-function make_mock_client() {
+function make_mock_client(): {
+  api: ReturnType<typeof vi.fn>;
+  post: ReturnType<typeof vi.fn>;
+  put: ReturnType<typeof vi.fn>;
+  header: ReturnType<typeof vi.fn>;
+} {
   const client = {
     api: vi.fn().mockReturnThis(),
     post: vi.fn(),

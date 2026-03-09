@@ -10,8 +10,11 @@ function make_mock_context(): TenantContext {
       put: vi.fn(),
       get: vi.fn(),
       delete: vi.fn(),
+      delete_version: vi.fn(),
       exists: vi.fn(),
       list: vi.fn(),
+      list_versions: vi.fn().mockResolvedValue([]),
+      probe_immutability: vi.fn(),
     },
     encrypt: vi.fn((data: Buffer) => Buffer.concat([Buffer.from('ENC:'), data])),
     decrypt: vi.fn((data: Buffer) => data.subarray(4)),
@@ -64,6 +67,32 @@ describe('S3ManifestRepository', () => {
       expect(ctx.storage.put).toHaveBeenCalledOnce();
       const [key] = (ctx.storage.put as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(key).toBe('manifests/user@test.com/snap-1.json');
+    });
+
+    it('applies effective object lock policy to manifest uploads', async () => {
+      const manifest = make_manifest({
+        object_lock: {
+          requested: {
+            mode: 'GOVERNANCE',
+            retention_days: 30,
+            legal_hold: true,
+          },
+          effective: {
+            mode: 'GOVERNANCE',
+            retain_until: '2026-04-08T12:00:00.000Z',
+            legal_hold: true,
+          },
+        },
+      });
+
+      await repo.save(ctx, manifest);
+
+      const put_call = (ctx.storage.put as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(put_call[3]).toEqual({
+        mode: 'GOVERNANCE',
+        retain_until: '2026-04-08T12:00:00.000Z',
+        legal_hold: true,
+      });
     });
   });
 

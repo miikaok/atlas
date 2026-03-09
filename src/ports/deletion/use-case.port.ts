@@ -1,6 +1,10 @@
 export interface DeletionResult {
   readonly deleted_objects: number;
   readonly deleted_manifests: number;
+  readonly retained_objects: number;
+  readonly retained_manifests: number;
+  readonly failed_objects: number;
+  readonly failed_manifests: number;
 }
 
 export interface DeletionUseCase {

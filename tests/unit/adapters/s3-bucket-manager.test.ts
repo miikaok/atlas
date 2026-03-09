@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ensure_bucket_exists, reset_bucket_cache } from '@/adapters/storage-s3/s3-bucket-manager';
+import {
+  ensure_bucket_exists,
+  probe_bucket_immutability,
+  reset_bucket_cache,
+} from '@/adapters/storage-s3/s3-bucket-manager';
 
-function make_mock_s3() {
+function make_mock_s3(): { send: ReturnType<typeof vi.fn> } {
   return { send: vi.fn() };
 }
 
@@ -45,5 +49,51 @@ describe('s3-bucket-manager', () => {
     mock_s3.send.mockRejectedValueOnce(new Error('AccessDenied'));
 
     await expect(ensure_bucket_exists(mock_s3 as never, 'x')).rejects.toThrow('AccessDenied');
+  });
+
+  it('probes versioning and object lock state', async () => {
+    mock_s3.send
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ Status: 'Enabled' })
+      .mockResolvedValueOnce({ ObjectLockConfiguration: { ObjectLockEnabled: 'Enabled' } });
+
+    const result = await probe_bucket_immutability(mock_s3 as never, 'bucket-a', {
+      mode: 'GOVERNANCE',
+    });
+
+    expect(result.bucket).toBe('bucket-a');
+    expect(result.versioning_enabled).toBe(true);
+    expect(result.object_lock_enabled).toBe(true);
+    expect(result.mode_supported).toBe(true);
+  });
+
+  it('memoizes immutability probe by bucket and mode', async () => {
+    mock_s3.send
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ Status: 'Enabled' })
+      .mockResolvedValueOnce({ ObjectLockConfiguration: { ObjectLockEnabled: 'Enabled' } });
+
+    await probe_bucket_immutability(mock_s3 as never, 'bucket-b', { mode: 'GOVERNANCE' });
+    await probe_bucket_immutability(mock_s3 as never, 'bucket-b', { mode: 'GOVERNANCE' });
+
+    expect(mock_s3.send).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns not-ready probe result when bucket is missing', async () => {
+    mock_s3.send.mockRejectedValueOnce(
+      Object.assign(new Error('The specified bucket does not exist'), {
+        name: 'Unknown',
+        $metadata: { httpStatusCode: 404 },
+      }),
+    );
+
+    const result = await probe_bucket_immutability(mock_s3 as never, 'missing-bucket', {
+      mode: 'GOVERNANCE',
+    });
+
+    expect(result.reachable).toBe(true);
+    expect(result.versioning_enabled).toBe(false);
+    expect(result.object_lock_enabled).toBe(false);
+    expect(result.mode_supported).toBe(false);
   });
 });

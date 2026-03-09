@@ -3,6 +3,7 @@ import type { S3Client } from '@aws-sdk/client-s3';
 import { S3_CLIENT_TOKEN } from '@/adapters/storage-s3/s3-client.factory';
 import { S3ObjectStorage } from '@/adapters/storage-s3/s3-object-storage.adapter';
 import { ensure_bucket_exists } from '@/adapters/storage-s3/s3-bucket-manager';
+import { tenant_bucket_name } from '@/adapters/storage-s3/tenant-bucket-name';
 import { EnvelopeKeyService } from '@/adapters/keystore/envelope-key-service.adapter';
 import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context.port';
 import type { AtlasConfig } from '@/utils/config';
@@ -10,11 +11,6 @@ import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
 import { logger } from '@/utils/logger';
 
 const DEK_META_KEY = '_meta/dek.enc';
-
-/** Bucket name convention: atlas-{tenant_id}. */
-function tenant_bucket_name(tenant_id: string): string {
-  return `atlas-${tenant_id}`;
-}
 
 @injectable()
 export class DefaultTenantContextFactory implements TenantContextFactory {

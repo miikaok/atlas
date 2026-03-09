@@ -4,7 +4,7 @@ import type { MailboxConnector, MailMessage } from '@/ports/mailbox/connector.po
 import type { ManifestEntry } from '@/domain/manifest';
 import { fetch_and_store_attachments } from '@/services/backup/attachment-storage-sync';
 import { calc_rate } from '@/services/shared/progress-rate';
-import type { BackupProgressReporter } from '@/ports/backup/use-case.port';
+import type { BackupProgressReporter, ObjectLockPolicy } from '@/ports/backup/use-case.port';
 
 export interface FolderSyncResult {
   entries: ManifestEntry[];
@@ -32,6 +32,7 @@ export interface FolderSyncParams {
   prev_delta_link?: string;
   previous_manifest_entries?: number;
   page_size?: number;
+  object_lock_policy?: ObjectLockPolicy;
 }
 
 /** Processes a single message: dedup check, encrypt, store, fetch attachments. */
@@ -43,13 +44,22 @@ async function process_message(
   message: MailMessage,
   entries: ManifestEntry[],
   stats: { stored: number; deduplicated: number; att_stored: number },
+  object_lock_policy?: ObjectLockPolicy,
 ): Promise<void> {
-  const entry = await store_single_message(ctx, message, mailbox_id);
+  const entry = await store_single_message(ctx, message, mailbox_id, object_lock_policy);
   if (entry.was_new) stats.stored++;
   else stats.deduplicated++;
 
   const att = message.has_attachments
-    ? await fetch_and_store_attachments(ctx, connector, tenant_id, mailbox_id, message.message_id)
+    ? await fetch_and_store_attachments(
+        ctx,
+        connector,
+        tenant_id,
+        mailbox_id,
+        message.message_id,
+        undefined,
+        object_lock_policy,
+      )
     : undefined;
 
   if (att) stats.att_stored += att.length;
@@ -77,6 +87,7 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
     prev_delta_link,
     folder_total,
     page_size,
+    object_lock_policy,
   } = params;
   const previous_manifest_entries = params.previous_manifest_entries ?? 0;
 
@@ -105,7 +116,16 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
 
     for (const message of page_messages) {
       if (is_interrupted()) break;
-      await process_message(ctx, connector, tenant_id, mailbox_id, message, entries, stats);
+      await process_message(
+        ctx,
+        connector,
+        tenant_id,
+        mailbox_id,
+        message,
+        entries,
+        stats,
+        object_lock_policy,
+      );
       folder_processed++;
       const gp = global_processed_before + folder_processed;
       const rate = calc_rate(gp, Date.now() - sync_start);
@@ -146,7 +166,16 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
   if (!streamed) {
     for (const message of delta.messages) {
       if (is_interrupted()) break;
-      await process_message(ctx, connector, tenant_id, mailbox_id, message, entries, stats);
+      await process_message(
+        ctx,
+        connector,
+        tenant_id,
+        mailbox_id,
+        message,
+        entries,
+        stats,
+        object_lock_policy,
+      );
       folder_processed++;
       const gp = global_processed_before + folder_processed;
       const rate = calc_rate(gp, Date.now() - sync_start);
@@ -171,6 +200,7 @@ export async function store_single_message(
   ctx: TenantContext,
   message: MailMessage,
   mailbox_id: string,
+  object_lock_policy?: ObjectLockPolicy,
 ): Promise<{ manifest_entry: ManifestEntry; was_new: boolean }> {
   const checksum = createHash('sha256').update(message.raw_body).digest('hex');
   const storage_key = `data/${mailbox_id}/${checksum}`;
@@ -178,10 +208,15 @@ export async function store_single_message(
   const already_stored = await ctx.storage.exists(storage_key);
   if (!already_stored) {
     const ciphertext = ctx.encrypt(message.raw_body);
-    await ctx.storage.put(storage_key, ciphertext, {
-      'x-message-id': message.message_id,
-      'x-plaintext-sha256': checksum,
-    });
+    await ctx.storage.put(
+      storage_key,
+      ciphertext,
+      {
+        'x-message-id': message.message_id,
+        'x-plaintext-sha256': checksum,
+      },
+      object_lock_policy,
+    );
   }
 
   const manifest_entry: ManifestEntry = {
