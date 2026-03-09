@@ -59,14 +59,12 @@ describe('MailboxSyncService object lock', () => {
       list_mail_folders: vi
         .fn()
         .mockResolvedValue([{ folder_id: 'folder-1', display_name: 'Inbox', total_item_count: 1 }]),
-      fetch_delta: vi
-        .fn()
-        .mockResolvedValue({
-          messages: [message],
-          removed_ids: [],
-          delta_link: 'delta',
-          delta_reset: false,
-        }),
+      fetch_delta: vi.fn().mockResolvedValue({
+        messages: [message],
+        removed_ids: [],
+        delta_link: 'delta',
+        delta_reset: false,
+      }),
       fetch_message: vi.fn(),
       fetch_attachments: vi.fn().mockResolvedValue([]),
     };
