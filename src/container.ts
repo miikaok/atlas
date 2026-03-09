@@ -31,17 +31,22 @@ import { load_config, ATLAS_CONFIG_TOKEN } from '@/utils/config';
 
 /** Creates and configures the application-wide DI container. */
 export function create_container(): Container {
+  const config = load_config();
+  return create_container_from_config(config);
+}
+
+/** Creates and configures the DI container from explicit AtlasConfig values. */
+export function create_container_from_config(config: AtlasConfig): Container {
   const container = new Container();
-  bind_config(container);
+  bind_config(container, config);
   bind_infrastructure(container);
   bind_adapters(container);
   bind_services(container);
   return container;
 }
 
-/** Loads and binds the Atlas configuration (config file + env vars). */
-function bind_config(container: Container): void {
-  const config = load_config();
+/** Binds AtlasConfig into the DI container. */
+function bind_config(container: Container, config: AtlasConfig): void {
   container.bind<AtlasConfig>(ATLAS_CONFIG_TOKEN).toConstantValue(config);
 }
 

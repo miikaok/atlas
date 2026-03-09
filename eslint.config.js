@@ -77,5 +77,31 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  {
+    files: ['src/sdk.ts', 'src/ports/atlas/**/*.ts', 'src/adapters/sdk/**/*.ts'],
+    rules: {
+      '@typescript-eslint/naming-convention': [
+        'error',
+        {
+          selector: 'default',
+          format: ['camelCase', 'PascalCase', 'UPPER_CASE'],
+          leadingUnderscore: 'allow',
+        },
+        {
+          selector: 'typeLike',
+          format: ['PascalCase'],
+        },
+        {
+          selector: 'enumMember',
+          format: ['UPPER_CASE'],
+        },
+        {
+          selector: 'objectLiteralProperty',
+          format: null,
+        },
+      ],
+      '@typescript-eslint/explicit-function-return-type': 'off',
+    },
+  },
   prettierConfig,
 );

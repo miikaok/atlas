@@ -37,6 +37,12 @@ export type { CatalogUseCase, MailboxSummary, ReadMessageResult } from './catalo
 
 export type { DeletionUseCase, DeletionResult } from './deletion/use-case.port';
 
+export type {
+  StorageCheckUseCase,
+  StorageCheckRequest,
+  StorageCheckResult,
+} from './storage-check/use-case.port';
+
 export {
   OBJECT_STORAGE_TOKEN,
   MAILBOX_CONNECTOR_TOKEN,
@@ -52,4 +58,5 @@ export {
   RESTORE_USE_CASE_TOKEN,
   CATALOG_USE_CASE_TOKEN,
   DELETION_USE_CASE_TOKEN,
+  STORAGE_CHECK_USE_CASE_TOKEN,
 } from './tokens/use-case.tokens';

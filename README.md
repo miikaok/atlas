@@ -27,6 +27,7 @@ An open-source CLI backup and restore engine for Microsoft 365 mailboxes. Built 
 ```mermaid
 graph LR
   CLI["CLI (commander)"] --> Services
+  SDK["SDK (npm API)"] --> Services
   Services --> Ports["Ports (interfaces)"]
   Adapters --> Ports
   Adapters --> GraphAPI["Microsoft Graph"]
@@ -386,6 +387,74 @@ atlas-{tenant_id}/
 
 - **Content-addressed keys** -- `data/{mailbox}/{SHA-256 of plaintext}` for messages, `attachments/{mailbox}/{SHA-256}` for file attachments. Deduplication is performed per-mailbox using content-addressed storage. Identical messages across snapshots are stored once.
 - **Manifests** -- encrypted JSON containing snapshot metadata, per-message checksums, sizes, storage keys, folder IDs, attachment metadata, and delta links for the next incremental sync.
+
+## Programmatic SDK
+
+Atlas can be used as a typed library in other Node.js applications. The SDK is available as a separate subpath import:
+
+```bash
+pnpm add m365-atlas
+```
+
+```typescript
+import { createAtlasInstance } from 'm365-atlas/sdk';
+
+const atlas = createAtlasInstance({
+  tenantId: 'your-azure-tenant-id',
+  clientId: 'app-client-id',
+  clientSecret: 'app-client-secret',
+  s3Endpoint: 'http://localhost:9000',
+  s3AccessKey: 'minioadmin',
+  s3SecretKey: 'minioadmin',
+  encryptionPassphrase: 'my-secret-passphrase',
+});
+```
+
+All config is explicit -- no environment variables or config files are read. The tenant is bound at creation time, so every method operates within that tenant scope.
+
+The SDK uses standard ES6 camelCase naming. All methods are async and return Promises. Backup and restore operations are mailbox-scoped for controlled batching in job runners:
+
+```typescript
+// backup a single mailbox (long-running)
+const result = await atlas.backupMailbox('user@company.com', { force_full: true });
+
+// list backed-up mailboxes
+const mailboxes = await atlas.listMailboxes();
+
+// list snapshots for a mailbox
+const snapshots = await atlas.listSnapshots('user@company.com');
+
+// verify snapshot integrity
+const verification = await atlas.verifySnapshot('snapshot-id');
+
+// restore from a specific snapshot (long-running)
+const restore = await atlas.restoreSnapshot('snapshot-id', { folder_name: 'Inbox' });
+
+// restore all snapshots for a mailbox (long-running)
+const fullRestore = await atlas.restoreMailbox('user@company.com');
+
+// read a single message
+const message = await atlas.readMessage('snapshot-id', 'msg-42');
+
+// delete mailbox data
+const deletion = await atlas.deleteMailboxData('user@company.com');
+
+// check storage readiness
+const check = await atlas.checkStorage({ mode: 'GOVERNANCE', retention_days: 30 });
+```
+
+For batch processing multiple mailboxes, create one instance and iterate:
+
+```typescript
+const mailboxIds = ['alice@company.com', 'bob@company.com', 'carol@company.com'];
+
+for (const mailboxId of mailboxIds) {
+  const result = await atlas.backupMailbox(mailboxId);
+  console.log(`${mailboxId}: snapshot ${result.snapshot.id}`);
+}
+```
+
+The SDK exports its own types via `m365-atlas/sdk`. Domain types, port interfaces, and result types are available from the root `m365-atlas` import for advanced use cases.
 
 ## Development
 
