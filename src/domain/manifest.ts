@@ -3,13 +3,11 @@ export type ManifestObjectLockMode = 'GOVERNANCE' | 'COMPLIANCE';
 export interface ManifestObjectLockRequestedPolicy {
   readonly mode?: ManifestObjectLockMode | undefined;
   readonly retention_days?: number | undefined;
-  readonly legal_hold?: boolean | undefined;
 }
 
 export interface ManifestObjectLockEffectivePolicy {
   readonly mode?: ManifestObjectLockMode | undefined;
   readonly retain_until?: string | undefined;
-  readonly legal_hold?: boolean | undefined;
 }
 
 export interface ManifestObjectLockPolicy {

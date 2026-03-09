@@ -183,12 +183,10 @@ export class MailboxSyncService implements BackupUseCase {
       requested: {
         mode: options.object_lock_request?.mode,
         retention_days: options.object_lock_request?.retention_days,
-        legal_hold: options.object_lock_request?.legal_hold ?? false,
       },
       effective: {
         mode: options.object_lock_policy.mode,
         retain_until: options.object_lock_policy.retain_until,
-        legal_hold: options.object_lock_policy.legal_hold ?? false,
       },
     };
   }

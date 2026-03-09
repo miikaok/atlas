@@ -75,12 +75,10 @@ describe('S3ManifestRepository', () => {
           requested: {
             mode: 'GOVERNANCE',
             retention_days: 30,
-            legal_hold: true,
           },
           effective: {
             mode: 'GOVERNANCE',
             retain_until: '2026-04-08T12:00:00.000Z',
-            legal_hold: true,
           },
         },
       });
@@ -91,7 +89,6 @@ describe('S3ManifestRepository', () => {
       expect(put_call[3]).toEqual({
         mode: 'GOVERNANCE',
         retain_until: '2026-04-08T12:00:00.000Z',
-        legal_hold: true,
       });
     });
   });

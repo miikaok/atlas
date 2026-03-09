@@ -54,7 +54,6 @@ export class S3ObjectStorage implements ObjectStorage {
           ObjectLockRetainUntilDate: object_lock_policy?.retain_until
             ? new Date(object_lock_policy.retain_until)
             : undefined,
-          ObjectLockLegalHoldStatus: object_lock_policy?.legal_hold ? 'ON' : undefined,
         }),
       );
     } catch (err) {
@@ -182,10 +181,9 @@ export class S3ObjectStorage implements ObjectStorage {
   }
 
   private async validate_immutability_policy(policy?: StorageObjectLockPolicy): Promise<void> {
-    if (!policy || (!policy.legal_hold && !policy.retain_until)) return;
+    if (!policy || !policy.retain_until) return;
     const probe = await this.probe_immutability({
       mode: policy.mode,
-      legal_hold: policy.legal_hold,
     });
     if (!probe.versioning_enabled) throw new ObjectLockVersioningDisabledError(this._bucket);
     if (!probe.object_lock_enabled) throw new ObjectLockUnsupportedError(this._bucket);

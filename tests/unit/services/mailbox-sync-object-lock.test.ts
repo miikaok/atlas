@@ -97,7 +97,6 @@ describe('MailboxSyncService object lock', () => {
       object_lock_policy: {
         mode: 'GOVERNANCE',
         retain_until: '2026-04-08T12:00:00.000Z',
-        legal_hold: false,
       },
     });
 
@@ -105,7 +104,6 @@ describe('MailboxSyncService object lock', () => {
       object_lock_policy: {
         mode: 'GOVERNANCE',
         retain_until: '2026-06-08T12:00:00.000Z',
-        legal_hold: false,
       },
     });
 
@@ -117,12 +115,10 @@ describe('MailboxSyncService object lock', () => {
       object_lock_policy: {
         mode: 'GOVERNANCE',
         retain_until: '2026-04-08T12:00:00.000Z',
-        legal_hold: true,
       },
       object_lock_request: {
         mode: 'GOVERNANCE',
         retention_days: 30,
-        legal_hold: true,
       },
     });
 
@@ -130,12 +126,10 @@ describe('MailboxSyncService object lock', () => {
       requested: {
         mode: 'GOVERNANCE',
         retention_days: 30,
-        legal_hold: true,
       },
       effective: {
         mode: 'GOVERNANCE',
         retain_until: '2026-04-08T12:00:00.000Z',
-        legal_hold: true,
       },
     });
   });

@@ -29,7 +29,6 @@ describe('StorageCheckService', () => {
     const result = await service.check_storage('tenant-1', {
       mode: 'GOVERNANCE',
       retention_days: 30,
-      legal_hold: false,
     });
 
     expect(result.bucket).toBe('atlas-tenant-1');

@@ -3,13 +3,11 @@ export type StorageObjectLockMode = 'GOVERNANCE' | 'COMPLIANCE';
 export interface StorageObjectLockPolicy {
   readonly mode?: StorageObjectLockMode | undefined;
   readonly retain_until?: string | undefined;
-  readonly legal_hold?: boolean | undefined;
 }
 
 export interface StorageImmutabilityProbeRequest {
   readonly mode?: StorageObjectLockMode | undefined;
   readonly retain_until?: string | undefined;
-  readonly legal_hold?: boolean | undefined;
 }
 
 export interface StorageImmutabilityProbeResult {

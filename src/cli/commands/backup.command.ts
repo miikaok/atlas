@@ -23,7 +23,6 @@ interface BackupOptions {
   pageSize?: string;
   retentionDays?: string;
   lockMode?: string;
-  legalHold?: boolean;
   requireImmutability?: boolean;
 }
 
@@ -39,7 +38,6 @@ export function register_backup_command(program: Command, get_container: Contain
     .option('-P, --page-size <n>', 'Graph API page size per delta request (1-100)', '25')
     .option('--retention-days <n>', 'apply object lock retention for N days')
     .option('--lock-mode <mode>', 'Object Lock mode: governance|compliance')
-    .option('--legal-hold', 'apply Object Lock legal hold')
     .option('--require-immutability', 'fail when immutability cannot be enforced')
     .action((options: BackupOptions) => execute_backup(get_container(), options));
 }
@@ -67,33 +65,27 @@ function build_sync_options(options: BackupOptions): SyncOptions {
 
 function build_object_lock_request(options: BackupOptions): ObjectLockRequest | undefined {
   const retention_days = parse_retention_days(options.retentionDays);
-  const legal_hold = options.legalHold ?? false;
   const mode = parse_lock_mode(options.lockMode, retention_days ? 'GOVERNANCE' : undefined);
-
-  if (!retention_days && !legal_hold) {
+  if (!retention_days) {
     return undefined;
   }
 
   return {
     mode,
     retention_days,
-    legal_hold,
   };
 }
 
 function build_object_lock_policy(options: BackupOptions): ObjectLockPolicy | undefined {
   const retention_days = parse_retention_days(options.retentionDays);
-  const legal_hold = options.legalHold ?? false;
   const mode = parse_lock_mode(options.lockMode, retention_days ? 'GOVERNANCE' : undefined);
   const require_immutability = options.requireImmutability ?? true;
-
-  if (!retention_days && !legal_hold) {
+  if (!retention_days) {
     return undefined;
   }
 
   return {
     mode,
-    legal_hold,
     require_immutability,
     retain_until: retention_days ? compute_retain_until_utc(retention_days) : undefined,
   };

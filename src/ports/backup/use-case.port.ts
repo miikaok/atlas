@@ -7,14 +7,12 @@ export type ObjectLockMode = 'GOVERNANCE' | 'COMPLIANCE';
 export interface ObjectLockPolicy {
   readonly mode?: ObjectLockMode | undefined;
   readonly retain_until?: string | undefined;
-  readonly legal_hold?: boolean | undefined;
   readonly require_immutability?: boolean | undefined;
 }
 
 export interface ObjectLockRequest {
   readonly mode?: ObjectLockMode | undefined;
   readonly retention_days?: number | undefined;
-  readonly legal_hold?: boolean | undefined;
 }
 
 export interface BackupProgressReporter {

@@ -25,7 +25,6 @@ export class StorageCheckService implements StorageCheckUseCase {
     const probe = await probe_bucket_immutability(this._s3, bucket, {
       mode: request.mode,
       retain_until: resolved_retain_until,
-      legal_hold: request.legal_hold,
     });
     return {
       bucket: probe.bucket,

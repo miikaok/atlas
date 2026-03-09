@@ -59,13 +59,11 @@ describe('S3ObjectStorage', () => {
       await storage.put('immutable', Buffer.from('body'), undefined, {
         mode: 'GOVERNANCE',
         retain_until: '2026-04-08T12:00:00.000Z',
-        legal_hold: true,
       });
 
       const cmd = mock_s3.send.mock.calls.at(-1)?.[0];
       expect(cmd.input.ObjectLockMode).toBe('GOVERNANCE');
       expect(cmd.input.ObjectLockRetainUntilDate).toBeInstanceOf(Date);
-      expect(cmd.input.ObjectLockLegalHoldStatus).toBe('ON');
     });
 
     it('fails with versioning-specific error when immutability requested and versioning is disabled', async () => {

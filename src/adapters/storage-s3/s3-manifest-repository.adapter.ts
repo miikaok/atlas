@@ -96,10 +96,9 @@ export class S3ManifestRepository implements ManifestRepository {
 function to_storage_object_lock_policy(manifest: Manifest): StorageObjectLockPolicy | undefined {
   if (!manifest.object_lock?.effective) return undefined;
   const effective = manifest.object_lock.effective;
-  if (!effective.legal_hold && !effective.retain_until) return undefined;
+  if (!effective.retain_until) return undefined;
   return {
     mode: effective.mode,
     retain_until: effective.retain_until,
-    legal_hold: effective.legal_hold,
   };
 }

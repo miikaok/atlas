@@ -13,7 +13,6 @@ interface StorageCheckOptions {
   tenant?: string;
   lockMode?: string;
   retentionDays?: string;
-  legalHold?: boolean;
 }
 
 /** Registers `atlas storage-check` for immutability readiness validation. */
@@ -27,7 +26,6 @@ export function register_storage_check_command(
     .option('-t, --tenant <id>', 'tenant identifier (defaults to config)')
     .option('--lock-mode <mode>', 'Object Lock mode: governance|compliance')
     .option('--retention-days <n>', 'planned retention period in days')
-    .option('--legal-hold', 'planned legal hold usage')
     .action((options: StorageCheckOptions) => execute_storage_check(get_container(), options));
 }
 
@@ -73,14 +71,12 @@ function resolve_tenant_id(container: Container, options: StorageCheckOptions): 
 function build_request(options: StorageCheckOptions): {
   mode?: ObjectLockMode;
   retention_days?: number;
-  legal_hold?: boolean;
 } {
   const mode = parse_lock_mode(options.lockMode);
   const retention_days = parse_retention_days(options.retentionDays);
   return {
     mode,
     retention_days,
-    legal_hold: options.legalHold,
   };
 }
 

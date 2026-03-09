@@ -54,16 +54,6 @@ describe('backup.command immutability options', () => {
     expect(sync_options.object_lock_request.retention_days).toBe(30);
   });
 
-  it('allows legal-hold-only requests without retention-days', async () => {
-    await program.parseAsync(['backup', '--mailbox', 'user@test.com', '--legal-hold'], {
-      from: 'user',
-    });
-
-    const sync_options = mock_run_backup_with_cli_adapter.mock.calls[0][3];
-    expect(sync_options.object_lock_policy.legal_hold).toBe(true);
-    expect(sync_options.object_lock_policy.retain_until).toBeUndefined();
-  });
-
   it('accepts compliance mode', async () => {
     await program.parseAsync(
       [

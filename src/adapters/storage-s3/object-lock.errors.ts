@@ -2,7 +2,7 @@ export class ObjectLockVersioningDisabledError extends Error {
   constructor(bucket: string) {
     super(
       `Immutability requested, but bucket versioning is disabled for ${bucket}. ` +
-        'Enable bucket versioning and Object Lock, or run backup without retention/legal-hold.',
+        'Enable bucket versioning and Object Lock, or run backup without retention.',
     );
     this.name = 'ObjectLockVersioningDisabledError';
   }

@@ -134,7 +134,6 @@ function is_object_lock_delete_error(err: unknown): boolean {
   const message = err instanceof Error ? `${err.name} ${err.message}`.toLowerCase() : '';
   return (
     message.includes('object lock') ||
-    message.includes('legal hold') ||
     message.includes('retention') ||
     message.includes('worm protected') ||
     message.includes('accessdenied') ||

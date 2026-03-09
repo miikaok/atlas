@@ -10,7 +10,7 @@ An open-source CLI backup and restore engine for Microsoft 365 mailboxes. Built 
 ## Highlights
 
 - **Per-tenant envelope encryption** -- each tenant gets its own AES-256-GCM data encryption key (DEK), derived and wrapped via scrypt. A storage breach exposes only encrypted blobs; each tenant's data requires its own master passphrase to decrypt. Most backup tools encrypt at the volume level or not at all.
-- **Storage-enforced immutability (Object Lock / WORM)** -- Atlas can apply real Object Lock controls on S3/MinIO writes (`retention`, `legal hold`, or both). Enforcement is done by the storage backend, not by application metadata. Atlas also stores requested/effective lock policy in manifests for audit and reconciliation.
+- **Storage-enforced immutability (Object Lock / WORM)** -- Atlas applies time-based Object Lock retention on S3/MinIO writes. Enforcement is done by the storage backend, not by application metadata. Atlas also stores requested/effective lock policy in manifests for audit and reconciliation.
 - **Content-addressed deduplication** -- messages and attachments are stored under `SHA-256(plaintext)` keys, scoped per-mailbox. Identical content across folders or backup runs within a mailbox is stored once. The same PDF attached to 50 emails is stored once. Dedup happens before encryption, so ciphertext variance doesn't defeat it.
 - **Attachment backup and restore** -- file attachments are fetched via the Graph API, deduplicated independently of their parent message, and stored encrypted alongside message data. Large attachments (>3 MB) use Graph upload sessions with chunked transfer during restore. Attachments over ~4 MB that Graph cannot inline during backup are recorded as metadata-only with a warning.
 - **Full restore with original timestamps** -- restored messages retain their original `receivedDateTime` and `sentDateTime` via MAPI extended properties, appear as received mail (not drafts), and are placed into a timestamped `Restore-<date>` folder preserving the original subfolder structure. Supports snapshot-level, folder-level, single-message, and cross-mailbox restores.
@@ -129,8 +129,6 @@ atlas backup --mailbox user@company.com --full        # force full sync (ignore 
 atlas backup --mailbox user@company.com -f Inbox Sent # specific folders only
 atlas backup --mailbox user@company.com -P 50         # larger page size for fewer API round-trips
 atlas backup --mailbox user@company.com --retention-days 30 --lock-mode governance
-atlas backup --mailbox user@company.com --legal-hold
-atlas backup --mailbox user@company.com --retention-days 90 --lock-mode governance --legal-hold
 atlas backup --mailbox user@company.com --retention-days 365 --lock-mode compliance
 atlas backup -t <tenant-id> -m user@company.com       # explicit tenant
 ```
@@ -143,13 +141,12 @@ atlas backup -t <tenant-id> -m user@company.com       # explicit tenant
 | `-P, --page-size <n>`    | Graph API page size per delta request (1-100, default 25) |
 | `--retention-days <n>`   | Apply Object Lock retention for `n` days             |
 | `--lock-mode <mode>`     | Object Lock mode (`governance` or `compliance`)      |
-| `--legal-hold`           | Apply Object Lock legal hold                         |
 | `--require-immutability` | Fail if immutability cannot be enforced              |
 | `-t, --tenant <id>`      | Override tenant ID from config                       |
 
 > **Page size tuning:** The `--page-size` flag controls how many messages are requested per Graph API delta page via the `Prefer: odata.maxpagesize` header. This is a *hint* -- the server may return fewer items when response payloads are large (e.g. messages with heavy HTML bodies or many inline images). Lower values reduce memory pressure and allow partial progress to be saved more frequently during interrupts. Higher values reduce HTTP round-trips but increase per-page processing time. The default of 25 is a balanced starting point; adjust based on your mailbox characteristics.
 
-> **Immutability behavior:** `--retention-days`, `--legal-hold`, or both make the backup immutable-requested. Atlas resolves retention to an internal UTC `retain_until`, probes bucket capability (versioning + Object Lock), and fails fast when unsupported instead of silently downgrading to mutable writes.
+> **Immutability behavior:** `--retention-days` makes the backup immutable-requested. Atlas resolves retention to an internal UTC `retain_until`, probes bucket capability (versioning + Object Lock), and fails fast when unsupported instead of silently downgrading to mutable writes.
 
 ### `atlas storage-check`
 
@@ -159,14 +156,12 @@ Validate immutable backup readiness without running a backup.
 atlas storage-check
 atlas storage-check --lock-mode governance --retention-days 30
 atlas storage-check --lock-mode compliance --retention-days 365
-atlas storage-check --legal-hold
 ```
 
 | Option                 | Description                                            |
 | ---------------------- | ------------------------------------------------------ |
 | `--lock-mode <mode>`   | Planned Object Lock mode (`governance` or `compliance`) |
 | `--retention-days <n>` | Planned retention period in days                       |
-| `--legal-hold`         | Planned legal hold usage                               |
 | `-t, --tenant <id>`    | Override tenant ID                                     |
 
 ### `atlas list`
@@ -271,7 +266,7 @@ atlas delete --purge -y                 # skip confirmation prompt
 | `-y, --yes`             | Skip confirmation prompt                                       |
 | `-t, --tenant <id>`     | Override tenant ID                                             |
 
-When Object Lock or legal hold protects objects, delete commands return non-zero and report retained items separately from generic failures. In versioned buckets, Atlas attempts version-level deletion and reports immutable leftovers transparently.
+When Object Lock retention protects objects, delete commands return non-zero and report retained items separately from generic failures. In versioned buckets, Atlas attempts version-level deletion and reports immutable leftovers transparently.
 
 ## Object Lock immutability
 
@@ -279,7 +274,7 @@ Atlas supports storage-enforced immutability on AWS S3 and MinIO.
 
 ### Enforcement model
 
-- **Enforced by storage backend:** Object Lock retention/legal hold prevents overwrite/delete based on backend rules.
+- **Enforced by storage backend:** Object Lock retention prevents overwrite/delete based on backend rules.
 - **Recorded by Atlas:** manifests include `object_lock.requested` and `object_lock.effective` for audit and operations.
 - **Not enforcement:** manifest policy metadata is bookkeeping, not control-plane enforcement.
 
@@ -307,8 +302,7 @@ This means newer snapshots can reference older versions whose retention window w
 
 ### Operational notes
 
-- `--legal-hold` is valid without retention.
-- `--retention-days` is valid without legal hold.
+- `--retention-days` is required for retention-enforced immutability.
 - `--lock-mode compliance` is stronger but operationally harder to reverse.
 - Purge in immutable environments means "attempt full deletion and report leftovers", not guaranteed immediate destruction.
 

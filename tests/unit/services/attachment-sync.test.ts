@@ -308,7 +308,6 @@ describe('MailboxSyncService – attachment backup', () => {
       object_lock_policy: {
         mode: 'GOVERNANCE',
         retain_until: '2026-04-08T12:00:00.000Z',
-        legal_hold: true,
       },
     });
 
@@ -318,7 +317,6 @@ describe('MailboxSyncService – attachment backup', () => {
     expect(att_put?.[3]).toEqual({
       mode: 'GOVERNANCE',
       retain_until: '2026-04-08T12:00:00.000Z',
-      legal_hold: true,
     });
   });
 });

@@ -3,7 +3,6 @@ import type { ObjectLockMode } from '@/ports/backup/use-case.port';
 export interface StorageCheckRequest {
   readonly mode?: ObjectLockMode | undefined;
   readonly retention_days?: number | undefined;
-  readonly legal_hold?: boolean | undefined;
 }
 
 export interface StorageCheckResult {
