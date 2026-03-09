@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { TenantContextFactory, TenantContext } from '@/ports/tenant/context.port';
 import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
@@ -68,7 +68,7 @@ export class VerificationService implements VerificationUseCase {
       const ciphertext = await ctx.storage.get(entry.storage_key);
       const plaintext = ctx.decrypt(ciphertext);
       const actual_checksum = this.compute_sha256(plaintext);
-      return actual_checksum !== entry.checksum;
+      return this.is_checksum_mismatch(actual_checksum, entry.checksum);
     } catch {
       return true;
     }
@@ -77,6 +77,20 @@ export class VerificationService implements VerificationUseCase {
   /** Returns the SHA-256 hex digest of the given buffer. */
   private compute_sha256(data: Buffer): string {
     return createHash('sha256').update(data).digest('hex');
+  }
+
+  /**
+   * Compares checksums in constant time when lengths match.
+   * Returns true for any mismatch or malformed length.
+   */
+  private is_checksum_mismatch(actual_checksum: string, expected_checksum: string): boolean {
+    if (actual_checksum.length !== expected_checksum.length) {
+      return true;
+    }
+
+    const actual = Buffer.from(actual_checksum, 'utf8');
+    const expected = Buffer.from(expected_checksum, 'utf8');
+    return !timingSafeEqual(actual, expected);
   }
 
   /** Assembles the final verification result from raw counts. */
