@@ -9,18 +9,23 @@ An open-source CLI backup and restore engine for Microsoft 365 mailboxes. Built 
 
 ## Highlights
 
-- **Per-tenant envelope encryption** -- each tenant gets its own AES-256-GCM data encryption key (DEK), derived and wrapped via scrypt. A storage breach exposes only encrypted blobs; each tenant's data requires its own master passphrase to decrypt. Most backup tools encrypt at the volume level or not at all.
-- **Storage-enforced immutability (Object Lock / WORM)** -- Atlas applies time-based Object Lock retention on S3/MinIO writes. Enforcement is done by the storage backend, not by application metadata. Atlas also stores requested/effective lock policy in manifests for audit and reconciliation.
-- **Content-addressed deduplication** -- messages and attachments are stored under `SHA-256(plaintext)` keys, scoped per-mailbox. Identical content across folders or backup runs within a mailbox is stored once. The same PDF attached to 50 emails is stored once. Dedup happens before encryption, so ciphertext variance doesn't defeat it.
-- **Attachment backup and restore** -- file attachments are fetched via the Graph API, deduplicated independently of their parent message, and stored encrypted alongside message data. Large attachments (>3 MB) use Graph upload sessions with chunked transfer during restore. Attachments over ~4 MB that Graph cannot inline during backup are recorded as metadata-only with a warning.
-- **Full restore with original timestamps** -- restored messages retain their original `receivedDateTime` and `sentDateTime` via MAPI extended properties, appear as received mail (not drafts), and are placed into a timestamped `Restore-<date>` folder preserving the original subfolder structure. Supports snapshot-level, folder-level, single-message, and cross-mailbox restores.
-- **Multi-layer integrity** -- plaintext SHA-256 checksums in the manifest, `Content-MD5` on every S3 PUT for transport verification, and AES-GCM authentication tags for at-rest tamper detection. `atlas verify` re-derives all three.
-- **Delta sync with stale-delta safeguard** -- uses Microsoft Graph delta queries for incremental backups. Detects interrupted prior runs (saved delta link + zero manifest entries) and automatically falls back to full enumeration. `--full` flag available to force it.
-- **Graceful interruption** -- Ctrl+C during a backup saves a partial manifest with already-stored objects and merges delta links so the next run resumes where it left off rather than starting over.
-- **Real-time progress dashboard** -- multi-line ANSI dashboard during backup and restore shows all folders simultaneously with per-folder and global ETA, items/s rate, and distinct states for active, completed, empty, synced (delta), and interrupted folders.
-- **Data protection by default** -- email subjects are hidden in `atlas list` output unless explicitly revealed with `-S`, preventing accidental exposure of confidential information during admin operations.
-- **Hexagonal architecture** -- ports-and-adapters with Inversify DI. Swap the storage backend or mail connector without touching business logic. Every service is independently testable.
-- **TypeScript / Node.js** -- installable via npm, no compiled binary distribution needed. Runs anywhere Node 20+ does.
+🔐 **Per-tenant encryption** — Each tenant gets a unique AES-256-GCM key derived via scrypt. Even if storage is breached, data stays encrypted and requires that tenant’s passphrase to decrypt.
+
+🧊 **Storage-level immutability (WORM)** — Atlas uses S3/MinIO Object Lock with time-based retention enforced by storage itself, not app metadata. Lock policies are also recorded in manifests for auditing.
+
+🧬 **Content-addressed deduplication** — Messages and attachments are stored by SHA-256 hash per mailbox. Identical files (e.g., the same PDF in 50 emails) are stored once. Dedup happens before encryption.
+
+📎 **Attachment backup & restore** — Attachments are fetched via Graph API, deduplicated, and encrypted with message data. Large files use chunked upload sessions during restore.
+
+🛡️ **Multi-layer integrity checks** — SHA-256 in manifests, Content-MD5 on uploads, and AES-GCM auth tags ensure transport and at-rest integrity. atlas verify validates all layers.
+
+🔄 **Delta sync with fallback** — Uses Microsoft Graph delta queries for incremental backups. If a run was interrupted, Atlas detects it and safely falls back to a full scan.
+
+📊 **Live progress dashboard** — ANSI dashboard shows all folders in real time with ETA, speed, and states like active, synced, completed, empty, or interrupted.
+
+🙈 **Data protection by default** — Email subjects are hidden in atlas list unless -S is used, preventing accidental exposure during admin tasks.
+
+🧩 **Hexagonal architecture** — Ports-and-adapters with dependency injection. Swap storage or mail connectors without touching core logic.
 
 ## Architecture
 
@@ -393,7 +398,7 @@ atlas-{tenant_id}/
 Atlas can be used as a typed library in other Node.js applications. The SDK is available as a separate subpath import:
 
 ```bash
-pnpm add m365-atlas
+npm add m365-atlas
 ```
 
 ```typescript
