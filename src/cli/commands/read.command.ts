@@ -3,8 +3,8 @@ import type { Container } from 'inversify';
 import chalk from 'chalk';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import type { CatalogUseCase } from '@/ports/catalog-use-case.port';
-import { CATALOG_USE_CASE_TOKEN } from '@/ports/catalog-use-case.port';
+import type { CatalogUseCase } from '@/ports/catalog/use-case.port';
+import { CATALOG_USE_CASE_TOKEN } from '@/ports/tokens/use-case.tokens';
 import type { AttachmentEntry } from '@/domain/manifest';
 import { logger } from '@/utils/logger';
 

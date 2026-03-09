@@ -8,5 +8,3 @@ export interface DeletionUseCase {
   delete_snapshot(tenant_id: string, snapshot_id: string): Promise<DeletionResult>;
   purge_tenant(tenant_id: string): Promise<DeletionResult>;
 }
-
-export const DELETION_USE_CASE_TOKEN = Symbol.for('DeletionUseCase');

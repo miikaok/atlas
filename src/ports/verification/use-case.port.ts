@@ -8,5 +8,3 @@ export interface VerificationResult {
 export interface VerificationUseCase {
   verify_snapshot_integrity(tenant_id: string, snapshot_id: string): Promise<VerificationResult>;
 }
-
-export const VERIFICATION_USE_CASE_TOKEN = Symbol.for('VerificationUseCase');

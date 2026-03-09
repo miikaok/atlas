@@ -2,8 +2,8 @@ import type { Command } from 'commander';
 import type { Container } from 'inversify';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import type { BackupUseCase, SyncOptions } from '@/ports/backup-use-case.port';
-import { BACKUP_USE_CASE_TOKEN } from '@/ports/backup-use-case.port';
+import type { BackupUseCase, SyncOptions } from '@/ports/backup/use-case.port';
+import { BACKUP_USE_CASE_TOKEN } from '@/ports/tokens/use-case.tokens';
 import { run_backup_with_cli_adapter } from '@/cli/adapters/backup-operation.adapter';
 import { logger } from '@/utils/logger';
 

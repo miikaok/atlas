@@ -2,8 +2,8 @@ import type { Command } from 'commander';
 import type { Container } from 'inversify';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import type { CatalogUseCase, MailboxSummary } from '@/ports/catalog-use-case.port';
-import { CATALOG_USE_CASE_TOKEN } from '@/ports/catalog-use-case.port';
+import type { CatalogUseCase, MailboxSummary } from '@/ports/catalog/use-case.port';
+import { CATALOG_USE_CASE_TOKEN } from '@/ports/tokens/use-case.tokens';
 import type { Manifest } from '@/domain/manifest';
 import { logger } from '@/utils/logger';
 

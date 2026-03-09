@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fetch_and_store_attachments } from '@/services/backup/attachment-storage-sync';
-import type { MailboxConnector } from '@/ports/mailbox-connector.port';
-import type { TenantContext } from '@/ports/tenant-context.port';
-import type { ObjectStorage } from '@/ports/object-storage.port';
+import type { MailboxConnector } from '@/ports/mailbox/connector.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
+import type { ObjectStorage } from '@/ports/storage/object-storage.port';
 
 function make_mock_storage(): ObjectStorage {
   return {

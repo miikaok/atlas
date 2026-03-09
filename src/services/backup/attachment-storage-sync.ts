@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import type { TenantContext } from '@/ports/tenant-context.port';
-import type { MailboxConnector, MessageAttachment } from '@/ports/mailbox-connector.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
+import type { MailboxConnector, MessageAttachment } from '@/ports/mailbox/connector.port';
 import type { AttachmentEntry } from '@/domain/manifest';
 
 /** Invoked after each attachment is stored: (done_so_far, total_attachments). */

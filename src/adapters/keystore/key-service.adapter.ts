@@ -1,5 +1,5 @@
 import { injectable } from 'inversify';
-import type { KeyService } from '@/ports/key-service.port';
+import type { KeyService } from '@/ports/crypto/key-service.port';
 
 @injectable()
 export class DefaultKeyService implements KeyService {

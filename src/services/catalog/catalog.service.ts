@@ -1,14 +1,16 @@
 import { inject, injectable } from 'inversify';
-import type { TenantContextFactory } from '@/ports/tenant-context.port';
-import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import type { ManifestRepository } from '@/ports/manifest-repository.port';
-import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
+import type { TenantContextFactory } from '@/ports/tenant/context.port';
+import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
 import type { Manifest } from '@/domain/manifest';
 import type {
   MailboxSummary,
   ReadMessageResult,
   CatalogUseCase,
-} from '@/ports/catalog-use-case.port';
+} from '@/ports/catalog/use-case.port';
+import {
+  TENANT_CONTEXT_FACTORY_TOKEN,
+  MANIFEST_REPOSITORY_TOKEN,
+} from '@/ports/tokens/outgoing.tokens';
 
 @injectable()
 export class CatalogService implements CatalogUseCase {

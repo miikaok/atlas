@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { S3ManifestRepository } from '@/adapters/storage-s3/s3-manifest-repository.adapter';
-import type { TenantContext } from '@/ports/tenant-context.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
 import type { Manifest } from '@/domain/manifest';
 
 function make_mock_context(): TenantContext {

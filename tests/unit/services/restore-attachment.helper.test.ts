@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { restore_entry_attachments } from '@/services/restore/restore-attachment-writer';
-import type { TenantContext } from '@/ports/tenant-context.port';
-import type { RestoreConnector } from '@/ports/restore-connector.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
+import type { RestoreConnector } from '@/ports/restore/connector.port';
 import type { AttachmentEntry } from '@/domain/manifest';
 
 function make_ctx(): TenantContext {

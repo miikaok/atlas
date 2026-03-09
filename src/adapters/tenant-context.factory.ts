@@ -4,7 +4,7 @@ import { S3_CLIENT_TOKEN } from '@/adapters/storage-s3/s3-client.factory';
 import { S3ObjectStorage } from '@/adapters/storage-s3/s3-object-storage.adapter';
 import { ensure_bucket_exists } from '@/adapters/storage-s3/s3-bucket-manager';
 import { EnvelopeKeyService } from '@/adapters/keystore/envelope-key-service.adapter';
-import type { TenantContext, TenantContextFactory } from '@/ports/tenant-context.port';
+import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context.port';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
 import { logger } from '@/utils/logger';

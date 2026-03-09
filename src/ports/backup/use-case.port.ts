@@ -55,5 +55,3 @@ export interface SyncResult {
 export interface BackupUseCase {
   sync_mailbox(tenant_id: string, mailbox_id: string, options?: SyncOptions): Promise<SyncResult>;
 }
-
-export const BACKUP_USE_CASE_TOKEN = Symbol.for('BackupUseCase');

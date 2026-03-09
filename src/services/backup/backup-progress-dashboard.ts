@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { format_duration } from '@/services/shared/progress-rate';
-import type { BackupProgressReporter } from '@/ports/backup-use-case.port';
+import type { BackupProgressReporter } from '@/ports/backup/use-case.port';
 
 interface FolderRow {
   name: string;

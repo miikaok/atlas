@@ -1,4 +1,4 @@
-import type { TenantContext } from '@/ports/tenant-context.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
 import type { ManifestEntry } from '@/domain/manifest';
 
 /**

@@ -1,7 +1,7 @@
 import { injectable } from 'inversify';
 import type { Manifest } from '@/domain/manifest';
-import type { ManifestRepository } from '@/ports/manifest-repository.port';
-import type { TenantContext } from '@/ports/tenant-context.port';
+import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
 
 const MANIFEST_PREFIX = 'manifests';
 

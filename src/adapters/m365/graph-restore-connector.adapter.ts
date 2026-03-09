@@ -5,8 +5,8 @@ import type {
   RestoreConnector,
   AttachmentUpload,
   UploadSession,
-} from '@/ports/restore-connector.port';
-import type { MailFolder } from '@/ports/mailbox-connector.port';
+} from '@/ports/restore/connector.port';
+import type { MailFolder } from '@/ports/mailbox/connector.port';
 import { rethrow_if_access_denied } from './graph-error-helpers';
 import { with_graph_retry } from './graph-error-helpers';
 import { logger } from '@/utils/logger';

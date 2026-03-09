@@ -8,7 +8,7 @@ import type {
   MessageAttachment,
   DeltaSyncResult,
   DeltaPageCallback,
-} from '@/ports/mailbox-connector.port';
+} from '@/ports/mailbox/connector.port';
 import { logger } from '@/utils/logger';
 import { is_invalid_delta_error, rethrow_if_access_denied } from './graph-error-helpers';
 

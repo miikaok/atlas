@@ -1,14 +1,18 @@
 import 'reflect-metadata';
 import { Container } from 'inversify';
-import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
-import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
-import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import { RESTORE_CONNECTOR_TOKEN } from '@/ports/restore-connector.port';
-import { BACKUP_USE_CASE_TOKEN } from '@/ports/backup-use-case.port';
-import { VERIFICATION_USE_CASE_TOKEN } from '@/ports/verification-use-case.port';
-import { RESTORE_USE_CASE_TOKEN } from '@/ports/restore-use-case.port';
-import { CATALOG_USE_CASE_TOKEN } from '@/ports/catalog-use-case.port';
-import { DELETION_USE_CASE_TOKEN } from '@/ports/deletion-use-case.port';
+import {
+  MAILBOX_CONNECTOR_TOKEN,
+  MANIFEST_REPOSITORY_TOKEN,
+  TENANT_CONTEXT_FACTORY_TOKEN,
+  RESTORE_CONNECTOR_TOKEN,
+} from '@/ports/tokens/outgoing.tokens';
+import {
+  BACKUP_USE_CASE_TOKEN,
+  VERIFICATION_USE_CASE_TOKEN,
+  RESTORE_USE_CASE_TOKEN,
+  CATALOG_USE_CASE_TOKEN,
+  DELETION_USE_CASE_TOKEN,
+} from '@/ports/tokens/use-case.tokens';
 import { GraphMailboxConnector } from '@/adapters/m365/graph-mailbox-connector.adapter';
 import { GraphRestoreConnector } from '@/adapters/m365/graph-restore-connector.adapter';
 import { create_graph_client, GRAPH_CLIENT_TOKEN } from '@/adapters/m365/graph-client.factory';

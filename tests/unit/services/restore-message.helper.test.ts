@@ -4,7 +4,7 @@ import {
   extract_folder_id_from_json,
   decrypt_and_parse_message,
 } from '@/services/restore/restore-message-transformer';
-import type { TenantContext } from '@/ports/tenant-context.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
 import type { ManifestEntry } from '@/domain/manifest';
 
 function make_graph_message(): Record<string, unknown> {

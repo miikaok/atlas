@@ -8,5 +8,3 @@ export interface KeyService {
   /** Generates a new data encryption key, returning both plain and encrypted forms. */
   generate_data_key(): Promise<{ plain: Buffer; encrypted: Buffer }>;
 }
-
-export const KEY_SERVICE_TOKEN = Symbol.for('KeyService');

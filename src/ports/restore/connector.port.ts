@@ -1,4 +1,4 @@
-import type { MailFolder } from '@/ports/mailbox-connector.port';
+import type { MailFolder } from '@/ports/mailbox/connector.port';
 
 export interface AttachmentUpload {
   readonly name: string;
@@ -65,5 +65,3 @@ export interface RestoreConnector {
     top: number,
   ): Promise<Array<{ subject: string; is_draft: boolean }>>;
 }
-
-export const RESTORE_CONNECTOR_TOKEN = Symbol.for('RestoreConnector');

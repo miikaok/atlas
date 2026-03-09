@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import type { BackupUseCase, SyncOptions, SyncResult } from '@/ports/backup-use-case.port';
+import type { BackupUseCase, SyncOptions, SyncResult } from '@/ports/backup/use-case.port';
 import { BackupProgressDashboard } from '@/services/backup/backup-progress-dashboard';
 import { logger } from '@/utils/logger';
 

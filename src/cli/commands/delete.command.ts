@@ -4,8 +4,8 @@ import type { Container } from 'inversify';
 import chalk from 'chalk';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import type { DeletionUseCase, DeletionResult } from '@/ports/deletion-use-case.port';
-import { DELETION_USE_CASE_TOKEN } from '@/ports/deletion-use-case.port';
+import type { DeletionUseCase, DeletionResult } from '@/ports/deletion/use-case.port';
+import { DELETION_USE_CASE_TOKEN } from '@/ports/tokens/use-case.tokens';
 import { logger } from '@/utils/logger';
 
 type ContainerFactory = () => Container;

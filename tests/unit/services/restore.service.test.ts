@@ -2,14 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Container } from 'inversify';
 import 'reflect-metadata';
 import { RestoreService } from '@/services/restore/restore.service';
-import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
-import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
-import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import { RESTORE_CONNECTOR_TOKEN } from '@/ports/restore-connector.port';
-import type { MailboxConnector, MailFolder } from '@/ports/mailbox-connector.port';
-import type { ManifestRepository } from '@/ports/manifest-repository.port';
-import type { TenantContext, TenantContextFactory } from '@/ports/tenant-context.port';
-import type { RestoreConnector } from '@/ports/restore-connector.port';
+import {
+  MAILBOX_CONNECTOR_TOKEN,
+  MANIFEST_REPOSITORY_TOKEN,
+  TENANT_CONTEXT_FACTORY_TOKEN,
+  RESTORE_CONNECTOR_TOKEN,
+} from '@/ports/tokens/outgoing.tokens';
+import type { MailboxConnector, MailFolder } from '@/ports/mailbox/connector.port';
+import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
+import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context.port';
+import type { RestoreConnector } from '@/ports/restore/connector.port';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
 
 function make_entry(id: string, folder_id: string): ManifestEntry {

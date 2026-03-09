@@ -2,18 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Container } from 'inversify';
 import 'reflect-metadata';
 import { MailboxSyncService } from '@/services/backup/mailbox-sync.service';
-import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
-import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
-import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
+import {
+  MAILBOX_CONNECTOR_TOKEN,
+  MANIFEST_REPOSITORY_TOKEN,
+  TENANT_CONTEXT_FACTORY_TOKEN,
+} from '@/ports/tokens/outgoing.tokens';
 import type {
   MailboxConnector,
   MailMessage,
   MailFolder,
   DeltaSyncResult,
-} from '@/ports/mailbox-connector.port';
-import type { ManifestRepository } from '@/ports/manifest-repository.port';
-import type { TenantContext, TenantContextFactory } from '@/ports/tenant-context.port';
-import type { ObjectStorage } from '@/ports/object-storage.port';
+} from '@/ports/mailbox/connector.port';
+import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
+import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context.port';
+import type { ObjectStorage } from '@/ports/storage/object-storage.port';
 
 function make_message(id: string, body: string): MailMessage {
   const raw = Buffer.from(body);

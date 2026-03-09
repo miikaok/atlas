@@ -1,12 +1,13 @@
 import { inject, injectable } from 'inversify';
 import { createHash } from 'node:crypto';
-import type { TenantContextFactory } from '@/ports/tenant-context.port';
-import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import type { TenantContext } from '@/ports/tenant-context.port';
-import type { ManifestRepository } from '@/ports/manifest-repository.port';
-import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
+import type { TenantContextFactory, TenantContext } from '@/ports/tenant/context.port';
+import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
-import type { VerificationResult, VerificationUseCase } from '@/ports/verification-use-case.port';
+import type { VerificationResult, VerificationUseCase } from '@/ports/verification/use-case.port';
+import {
+  TENANT_CONTEXT_FACTORY_TOKEN,
+  MANIFEST_REPOSITORY_TOKEN,
+} from '@/ports/tokens/outgoing.tokens';
 
 @injectable()
 export class VerificationService implements VerificationUseCase {

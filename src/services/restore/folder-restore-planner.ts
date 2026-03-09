@@ -1,5 +1,5 @@
-import type { RestoreConnector } from '@/ports/restore-connector.port';
-import type { MailboxConnector, MailFolder } from '@/ports/mailbox-connector.port';
+import type { RestoreConnector } from '@/ports/restore/connector.port';
+import type { MailboxConnector, MailFolder } from '@/ports/mailbox/connector.port';
 import type { ManifestEntry } from '@/domain/manifest';
 import { logger } from '@/utils/logger';
 

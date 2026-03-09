@@ -1,5 +1,5 @@
 import type { Manifest } from '@/domain/manifest';
-import type { TenantContext } from '@/ports/tenant-context.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
 
 export interface ManifestRepository {
   save(ctx: TenantContext, manifest: Manifest): Promise<void>;
@@ -11,5 +11,3 @@ export interface ManifestRepository {
   /** Downloads and decrypts every manifest in the tenant bucket. */
   list_all_manifests(ctx: TenantContext): Promise<Manifest[]>;
 }
-
-export const MANIFEST_REPOSITORY_TOKEN = Symbol.for('ManifestRepository');

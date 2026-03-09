@@ -1,10 +1,7 @@
 import { inject, injectable } from 'inversify';
-import type { TenantContextFactory } from '@/ports/tenant-context.port';
-import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import type { MailboxConnector, MailFolder } from '@/ports/mailbox-connector.port';
-import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
-import type { ManifestRepository } from '@/ports/manifest-repository.port';
-import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
+import type { TenantContextFactory } from '@/ports/tenant/context.port';
+import type { MailboxConnector, MailFolder } from '@/ports/mailbox/connector.port';
+import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
 import type { ManifestEntry } from '@/domain/manifest';
 import { calc_rate } from '@/services/shared/progress-rate';
 import { sync_single_folder } from '@/services/backup/folder-sync-executor';
@@ -19,7 +16,12 @@ import type {
   SyncOptions,
   SyncResult,
   BackupSyncMode,
-} from '@/ports/backup-use-case.port';
+} from '@/ports/backup/use-case.port';
+import {
+  TENANT_CONTEXT_FACTORY_TOKEN,
+  MAILBOX_CONNECTOR_TOKEN,
+  MANIFEST_REPOSITORY_TOKEN,
+} from '@/ports/tokens/outgoing.tokens';
 
 class NoopBackupProgressReporter implements BackupProgressReporter {
   set_status(): void {}

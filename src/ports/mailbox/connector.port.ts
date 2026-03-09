@@ -72,5 +72,3 @@ export interface MailboxConnector {
     message_id: string,
   ): Promise<MessageAttachment[]>;
 }
-
-export const MAILBOX_CONNECTOR_TOKEN = Symbol.for('MailboxConnector');

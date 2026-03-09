@@ -27,5 +27,3 @@ export interface RestoreUseCase {
     options?: RestoreOptions,
   ): Promise<RestoreResult>;
 }
-
-export const RESTORE_USE_CASE_TOKEN = Symbol.for('RestoreUseCase');

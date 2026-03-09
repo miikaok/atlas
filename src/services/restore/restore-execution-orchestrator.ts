@@ -1,9 +1,9 @@
 import chalk from 'chalk';
-import type { TenantContext } from '@/ports/tenant-context.port';
-import type { MailboxConnector } from '@/ports/mailbox-connector.port';
-import type { RestoreConnector } from '@/ports/restore-connector.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
+import type { MailboxConnector } from '@/ports/mailbox/connector.port';
+import type { RestoreConnector } from '@/ports/restore/connector.port';
 import type { ManifestEntry } from '@/domain/manifest';
-import type { RestoreResult } from '@/ports/restore-use-case.port';
+import type { RestoreResult } from '@/ports/restore/use-case.port';
 import {
   decrypt_and_parse_message,
   sanitize_message_for_restore,

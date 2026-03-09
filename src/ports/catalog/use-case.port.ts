@@ -23,5 +23,3 @@ export interface CatalogUseCase {
     message_ref: string,
   ): Promise<ReadMessageResult | undefined>;
 }
-
-export const CATALOG_USE_CASE_TOKEN = Symbol.for('CatalogUseCase');

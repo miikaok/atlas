@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import type { TenantContext } from '@/ports/tenant-context.port';
-import type { MailboxConnector, MailMessage } from '@/ports/mailbox-connector.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
+import type { MailboxConnector, MailMessage } from '@/ports/mailbox/connector.port';
 import type { ManifestEntry } from '@/domain/manifest';
 import { fetch_and_store_attachments } from '@/services/backup/attachment-storage-sync';
 import { calc_rate } from '@/services/shared/progress-rate';
-import type { BackupProgressReporter } from '@/ports/backup-use-case.port';
+import type { BackupProgressReporter } from '@/ports/backup/use-case.port';
 
 export interface FolderSyncResult {
   entries: ManifestEntry[];

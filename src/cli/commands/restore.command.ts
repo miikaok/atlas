@@ -3,8 +3,8 @@ import chalk from 'chalk';
 import type { Container } from 'inversify';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
-import type { RestoreUseCase, RestoreResult, RestoreOptions } from '@/ports/restore-use-case.port';
-import { RESTORE_USE_CASE_TOKEN } from '@/ports/restore-use-case.port';
+import type { RestoreUseCase, RestoreResult, RestoreOptions } from '@/ports/restore/use-case.port';
+import { RESTORE_USE_CASE_TOKEN } from '@/ports/tokens/use-case.tokens';
 import { logger } from '@/utils/logger';
 
 type ContainerFactory = () => Container;

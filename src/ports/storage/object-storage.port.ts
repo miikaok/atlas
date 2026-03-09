@@ -14,5 +14,3 @@ export interface ObjectStorage {
   /** Lists all keys that share the given prefix. */
   list(prefix: string): Promise<string[]>;
 }
-
-export const OBJECT_STORAGE_TOKEN = Symbol.for('ObjectStorage');

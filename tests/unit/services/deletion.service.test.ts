@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Container } from 'inversify';
 import 'reflect-metadata';
 import { DeletionService } from '@/services/deletion/deletion.service';
-import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
-import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import type { ManifestRepository } from '@/ports/manifest-repository.port';
-import type { TenantContext, TenantContextFactory } from '@/ports/tenant-context.port';
-import type { ObjectStorage } from '@/ports/object-storage.port';
+import {
+  MANIFEST_REPOSITORY_TOKEN,
+  TENANT_CONTEXT_FACTORY_TOKEN,
+} from '@/ports/tokens/outgoing.tokens';
+import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
+import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context.port';
+import type { ObjectStorage } from '@/ports/storage/object-storage.port';
 import type { Manifest } from '@/domain/manifest';
 
 function make_manifest(overrides: Partial<Manifest> = {}): Manifest {

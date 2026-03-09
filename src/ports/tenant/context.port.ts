@@ -1,4 +1,4 @@
-import type { ObjectStorage } from '@/ports/object-storage.port';
+import type { ObjectStorage } from '@/ports/storage/object-storage.port';
 
 /** Tenant-scoped object storage accessor. */
 export interface TenantStorageContext {
@@ -22,5 +22,3 @@ export interface TenantContext extends TenantStorageContext, TenantCryptoContext
 export interface TenantContextFactory {
   create(tenant_id: string): Promise<TenantContext>;
 }
-
-export const TENANT_CONTEXT_FACTORY_TOKEN = Symbol.for('TenantContextFactory');

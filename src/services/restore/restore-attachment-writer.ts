@@ -1,5 +1,5 @@
-import type { TenantContext } from '@/ports/tenant-context.port';
-import type { RestoreConnector } from '@/ports/restore-connector.port';
+import type { TenantContext } from '@/ports/tenant/context.port';
+import type { RestoreConnector } from '@/ports/restore/connector.port';
 import type { AttachmentEntry } from '@/domain/manifest';
 import { logger } from '@/utils/logger';
 

@@ -1,13 +1,9 @@
 import { inject, injectable } from 'inversify';
 import chalk from 'chalk';
-import type { TenantContextFactory, TenantContext } from '@/ports/tenant-context.port';
-import { TENANT_CONTEXT_FACTORY_TOKEN } from '@/ports/tenant-context.port';
-import type { ManifestRepository } from '@/ports/manifest-repository.port';
-import { MANIFEST_REPOSITORY_TOKEN } from '@/ports/manifest-repository.port';
-import type { MailboxConnector } from '@/ports/mailbox-connector.port';
-import { MAILBOX_CONNECTOR_TOKEN } from '@/ports/mailbox-connector.port';
-import type { RestoreConnector } from '@/ports/restore-connector.port';
-import { RESTORE_CONNECTOR_TOKEN } from '@/ports/restore-connector.port';
+import type { TenantContextFactory, TenantContext } from '@/ports/tenant/context.port';
+import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
+import type { MailboxConnector } from '@/ports/mailbox/connector.port';
+import type { RestoreConnector } from '@/ports/restore/connector.port';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
 import {
   build_folder_map,
@@ -30,7 +26,13 @@ import {
 import { RestoreProgressDashboard } from '@/services/restore/restore-progress-dashboard';
 import { calc_rate } from '@/services/shared/progress-rate';
 import { logger } from '@/utils/logger';
-import type { RestoreUseCase, RestoreResult, RestoreOptions } from '@/ports/restore-use-case.port';
+import type { RestoreUseCase, RestoreResult, RestoreOptions } from '@/ports/restore/use-case.port';
+import {
+  TENANT_CONTEXT_FACTORY_TOKEN,
+  MANIFEST_REPOSITORY_TOKEN,
+  MAILBOX_CONNECTOR_TOKEN,
+  RESTORE_CONNECTOR_TOKEN,
+} from '@/ports/tokens/outgoing.tokens';
 
 @injectable()
 export class RestoreService implements RestoreUseCase {

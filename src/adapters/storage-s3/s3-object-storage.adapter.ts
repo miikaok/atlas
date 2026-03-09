@@ -7,7 +7,7 @@ import {
   ListObjectsV2Command,
   type S3Client,
 } from '@aws-sdk/client-s3';
-import type { ObjectStorage } from '@/ports/object-storage.port';
+import type { ObjectStorage } from '@/ports/storage/object-storage.port';
 
 /**
  * S3-backed ObjectStorage scoped to a single bucket.
