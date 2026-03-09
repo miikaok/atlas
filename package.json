@@ -59,7 +59,7 @@
     "vitest": "^4.0.18"
   },
   "lint-staged": {
-    "*.ts": "prettier --write"
+    "**/*.{ts,tsx,js,jsx}": "prettier --write"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1004.0",
