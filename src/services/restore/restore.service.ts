@@ -59,6 +59,8 @@ export class RestoreService implements RestoreUseCase {
     const source_mailbox = manifest.mailbox_id;
     const target_mailbox = options.target_mailbox?.toLowerCase() ?? source_mailbox;
 
+    await this.assert_mailbox_exists(tenant_id, target_mailbox);
+
     const entries = await this.resolve_entries(ctx, manifest, source_mailbox, tenant_id, options);
     if (entries.length === 0) {
       logger.warn('No entries to restore');
@@ -92,6 +94,8 @@ export class RestoreService implements RestoreUseCase {
   ): Promise<RestoreResult> {
     const ctx = await this._tenant_factory.create(tenant_id);
     const target = options.target_mailbox?.toLowerCase() ?? mailbox_id;
+
+    await this.assert_mailbox_exists(tenant_id, target);
 
     const manifests = await this.load_mailbox_manifests(ctx, mailbox_id, options);
     if (manifests.length === 0) {
@@ -309,6 +313,17 @@ export class RestoreService implements RestoreUseCase {
       };
     } finally {
       process.removeListener('SIGINT', on_sigint);
+    }
+  }
+
+  /** Fails fast if the target mailbox does not exist in the tenant. */
+  private async assert_mailbox_exists(tenant_id: string, mailbox_id: string): Promise<void> {
+    const exists = await this._connector.mailbox_exists(tenant_id, mailbox_id);
+    if (!exists) {
+      throw new Error(
+        `Mailbox "${mailbox_id}" does not exist in the tenant. ` +
+          `Verify the email address and try again.`,
+      );
     }
   }
 

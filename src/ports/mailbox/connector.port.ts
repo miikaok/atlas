@@ -47,6 +47,9 @@ export interface MessageAttachment {
 export interface MailboxConnector {
   list_mailboxes(tenant_id: string): Promise<string[]>;
 
+  /** Returns true if the mailbox exists in the tenant, false otherwise. */
+  mailbox_exists(tenant_id: string, mailbox_id: string): Promise<boolean>;
+
   list_mail_folders(tenant_id: string, mailbox_id: string): Promise<MailFolder[]>;
 
   /**
