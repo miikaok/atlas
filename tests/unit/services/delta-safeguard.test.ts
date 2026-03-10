@@ -77,6 +77,7 @@ describe('MailboxSyncService – force_full / stale-delta safeguard', () => {
 
     mock_connector = {
       list_mailboxes: vi.fn().mockResolvedValue([]),
+      mailbox_exists: vi.fn().mockResolvedValue(true),
       list_mail_folders: vi.fn().mockResolvedValue([make_folder('Inbox', 'folder-1')]),
       fetch_delta: vi.fn().mockResolvedValue(make_delta([])),
       fetch_message: vi.fn(),

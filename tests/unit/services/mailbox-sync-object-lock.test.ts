@@ -56,6 +56,7 @@ describe('MailboxSyncService object lock', () => {
 
     mock_connector = {
       list_mailboxes: vi.fn().mockResolvedValue([]),
+      mailbox_exists: vi.fn().mockResolvedValue(true),
       list_mail_folders: vi
         .fn()
         .mockResolvedValue([{ folder_id: 'folder-1', display_name: 'Inbox', total_item_count: 1 }]),

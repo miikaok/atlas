@@ -85,6 +85,7 @@ describe('MailboxSyncService', () => {
 
     mock_connector = {
       list_mailboxes: vi.fn().mockResolvedValue([]),
+      mailbox_exists: vi.fn().mockResolvedValue(true),
       list_mail_folders: vi.fn().mockResolvedValue([make_folder('Inbox', 'folder-1')]),
       fetch_delta: vi.fn().mockResolvedValue(make_delta([])),
       fetch_message: vi.fn(),
@@ -109,6 +110,16 @@ describe('MailboxSyncService', () => {
     container.bind(MailboxSyncService).toSelf();
 
     service = container.get(MailboxSyncService);
+  });
+
+  it('throws when mailbox does not exist in the tenant', async () => {
+    (mock_connector.mailbox_exists as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+    await expect(service.sync_mailbox('t', 'nobody@test.com')).rejects.toThrow(
+      'does not exist in the tenant',
+    );
+
+    expect(mock_connector.list_mail_folders).not.toHaveBeenCalled();
   });
 
   it('creates tenant context for the given tenant', async () => {
