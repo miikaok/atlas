@@ -51,7 +51,7 @@ function resolve_tenant_id(container: Container, options: BackupOptions): string
 
 /** Builds SyncOptions from CLI flags. */
 function build_sync_options(options: BackupOptions): SyncOptions {
-  const page_size = Math.max(1, Math.min(100, parseInt(options.pageSize ?? '25', 10) || 25));
+  const page_size = Math.max(1, Math.min(100, parseInt(options.pageSize ?? '10', 10) || 10));
   const object_lock_request = build_object_lock_request(options);
   const object_lock_policy = build_object_lock_policy(options);
   return {
