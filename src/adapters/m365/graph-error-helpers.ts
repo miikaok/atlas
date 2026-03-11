@@ -12,9 +12,9 @@ const NETWORK_ERROR_CODES = new Set([
   'UND_ERR_CONNECT_TIMEOUT',
   'UND_ERR_SOCKET',
 ]);
-const MAX_RETRIES = 6;
-const BASE_DELAY_MS = 1000;
-const MAX_DELAY_MS = 60_000;
+const MAX_RETRIES = 12;
+const BASE_DELAY_MS = 1_000;
+const MAX_DELAY_MS = 300_000;
 
 /**
  * Detects Graph errors that indicate an invalid/expired delta token.
@@ -102,7 +102,11 @@ export function is_network_error(err: unknown): boolean {
     lower.includes('network request failed') ||
     lower.includes('econnreset') ||
     lower.includes('etimedout') ||
-    lower.includes('fetch failed')
+    lower.includes('fetch failed') ||
+    lower.includes('terminated') ||
+    lower.includes('aborted') ||
+    lower.includes('network error') ||
+    lower.includes('client network socket disconnected')
   );
 }
 
@@ -116,8 +120,9 @@ export function is_retryable_error(err: unknown): boolean {
  * transient HTTP errors (429, 503, 504) and network-level errors (ETIMEDOUT,
  * ECONNRESET, socket hang up, etc.).
  *
- * Retries up to MAX_RETRIES times. Respects Retry-After on 429. Delays are
- * capped at MAX_DELAY_MS. Each retry is logged for observability.
+ * Retries up to 12 times with delays capped at 5 minutes, giving a total
+ * retry budget of ~23 minutes to survive extended network outages.
+ * Respects Retry-After on 429. Each retry is logged for observability.
  *
  * This function is designed to be reusable across backup, restore, save, and
  * any other operation that communicates over the network.

@@ -95,6 +95,18 @@ describe('is_network_error', () => {
     expect(is_network_error(new Error('read ECONNRESET'))).toBe(true);
   });
 
+  it('returns true for "terminated" message', () => {
+    expect(is_network_error(new Error('terminated'))).toBe(true);
+  });
+
+  it('returns true for "aborted" message', () => {
+    expect(is_network_error(new Error('The operation was aborted'))).toBe(true);
+  });
+
+  it('returns true for "client network socket disconnected" message', () => {
+    expect(is_network_error(new Error('Client network socket disconnected'))).toBe(true);
+  });
+
   it('returns false for a 404 HTTP error', () => {
     expect(is_network_error({ statusCode: 404 })).toBe(false);
   });
@@ -183,13 +195,29 @@ describe('with_graph_retry', () => {
     const fn = vi.fn().mockRejectedValue(err);
 
     const promise = with_graph_retry(fn).catch((e: unknown) => e);
-    for (let i = 0; i < 7; i++) {
-      await vi.advanceTimersByTimeAsync(60_000);
+    for (let i = 0; i < 13; i++) {
+      await vi.advanceTimersByTimeAsync(300_000);
     }
 
     const result = await promise;
     expect(result).toEqual(err);
-    expect(fn).toHaveBeenCalledTimes(7);
+    expect(fn).toHaveBeenCalledTimes(13);
+  });
+
+  it('retries on "terminated" error and succeeds', async () => {
+    let calls = 0;
+    const fn = (): Promise<string> => {
+      calls++;
+      if (calls <= 3) return Promise.reject(new Error('terminated'));
+      return Promise.resolve('recovered');
+    };
+
+    const promise = with_graph_retry(fn);
+    await vi.advanceTimersByTimeAsync(300_000);
+    const result = await promise;
+
+    expect(result).toBe('recovered');
+    expect(calls).toBe(4);
   });
 
   it('respects Retry-After header', async () => {
