@@ -5,6 +5,7 @@
 [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/miikaok/34b7e6013b428e289db442d3d28f4f14/raw/m365-atlas-coverage.json)](https://github.com/miikaok/atlas/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/m365-atlas)](https://www.npmjs.com/package/m365-atlas)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
+[![Socket Badge](https://badge.socket.dev/npm/package/m365-atlas)](https://socket.dev/npm/package/m365-atlas)
 
 An open-source CLI backup and restore engine for Microsoft 365 mailboxes. Built with per-tenant envelope encryption, content-addressed deduplication, multi-layer integrity validation, and efficient delta synchronization for scalable, secure operations against S3-compatible object storage.
 
