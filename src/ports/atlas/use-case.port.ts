@@ -1,6 +1,7 @@
 import type { SyncOptions, SyncResult } from '@/ports/backup/use-case.port';
 import type { VerificationResult } from '@/ports/verification/use-case.port';
 import type { RestoreOptions, RestoreResult } from '@/ports/restore/use-case.port';
+import type { SaveOptions, SaveResult } from '@/ports/save/use-case.port';
 import type { MailboxSummary, ReadMessageResult } from '@/ports/catalog/use-case.port';
 import type { Manifest } from '@/domain/manifest';
 import type { DeletionResult } from '@/ports/deletion/use-case.port';
@@ -22,6 +23,8 @@ export interface AtlasInstance {
   verifySnapshot(snapshotId: string): Promise<VerificationResult>;
   restoreSnapshot(snapshotId: string, options?: RestoreOptions): Promise<RestoreResult>;
   restoreMailbox(mailboxId: string, options?: RestoreOptions): Promise<RestoreResult>;
+  saveSnapshot(snapshotId: string, options?: SaveOptions): Promise<SaveResult>;
+  saveMailbox(mailboxId: string, options?: SaveOptions): Promise<SaveResult>;
   listMailboxes(): Promise<MailboxSummary[]>;
   listSnapshots(mailboxId: string): Promise<Manifest[]>;
   getSnapshotDetail(snapshotId: string): Promise<Manifest | undefined>;

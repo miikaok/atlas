@@ -7,6 +7,7 @@ import type { RestoreUseCase } from '@/ports/restore/use-case.port';
 import type { CatalogUseCase } from '@/ports/catalog/use-case.port';
 import type { DeletionUseCase } from '@/ports/deletion/use-case.port';
 import type { StorageCheckUseCase } from '@/ports/storage-check/use-case.port';
+import type { SaveUseCase } from '@/ports/save/use-case.port';
 import {
   BACKUP_USE_CASE_TOKEN,
   VERIFICATION_USE_CASE_TOKEN,
@@ -14,6 +15,7 @@ import {
   CATALOG_USE_CASE_TOKEN,
   DELETION_USE_CASE_TOKEN,
   STORAGE_CHECK_USE_CASE_TOKEN,
+  SAVE_USE_CASE_TOKEN,
 } from '@/ports/tokens/use-case.tokens';
 
 /** Creates a tenant-bound Atlas SDK instance from explicit configuration values. */
@@ -27,6 +29,7 @@ export function createAtlasInstance(config: AtlasInstanceConfig): AtlasInstance 
   const catalogUseCase = container.get<CatalogUseCase>(CATALOG_USE_CASE_TOKEN);
   const deletionUseCase = container.get<DeletionUseCase>(DELETION_USE_CASE_TOKEN);
   const storageCheckUseCase = container.get<StorageCheckUseCase>(STORAGE_CHECK_USE_CASE_TOKEN);
+  const saveUseCase = container.get<SaveUseCase>(SAVE_USE_CASE_TOKEN);
 
   return {
     async backupMailbox(mailboxId, options) {
@@ -40,6 +43,12 @@ export function createAtlasInstance(config: AtlasInstanceConfig): AtlasInstance 
     },
     async restoreMailbox(mailboxId, options) {
       return await restoreUseCase.restore_mailbox(tenantId, mailboxId, options);
+    },
+    async saveSnapshot(snapshotId, options) {
+      return await saveUseCase.save_snapshot(tenantId, snapshotId, options);
+    },
+    async saveMailbox(mailboxId, options) {
+      return await saveUseCase.save_mailbox(tenantId, mailboxId, options);
     },
     async listMailboxes() {
       return await catalogUseCase.list_mailboxes(tenantId);
