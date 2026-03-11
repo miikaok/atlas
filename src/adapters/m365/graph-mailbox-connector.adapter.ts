@@ -85,7 +85,9 @@ export class GraphMailboxConnector implements MailboxConnector {
   async list_mailboxes(_tenant_id: string): Promise<string[]> {
     try {
       const url = '/users?$select=id,mail,displayName&$filter=mail ne null&$top=999';
-      const user_records = await this.collect_all_pages<GraphUserRecord>(url);
+      const user_records = await with_graph_retry(() =>
+        this.collect_all_pages<GraphUserRecord>(url),
+      );
       return extract_user_ids(user_records);
     } catch (err) {
       rethrow_if_access_denied(err);
@@ -114,7 +116,9 @@ export class GraphMailboxConnector implements MailboxConnector {
       const url =
         `/users/${mailbox_id}/mailFolders` +
         '?$select=id,displayName,parentFolderId,totalItemCount&$top=250';
-      const folder_records = await this.collect_all_pages<GraphFolderRecord>(url);
+      const folder_records = await with_graph_retry(() =>
+        this.collect_all_pages<GraphFolderRecord>(url),
+      );
       return filter_and_map_folders(folder_records);
     } catch (err) {
       rethrow_if_mailbox_not_licensed(err);
@@ -141,7 +145,7 @@ export class GraphMailboxConnector implements MailboxConnector {
         ? `fetch_delta: resuming from saved delta link`
         : `fetch_delta: starting initial full sync`,
     );
-    const ps = page_size ?? 25;
+    const ps = page_size ?? 10;
 
     try {
       return await this.execute_delta_sync(
@@ -170,9 +174,12 @@ export class GraphMailboxConnector implements MailboxConnector {
     message_id: string,
   ): Promise<MailMessage> {
     try {
-      const response = (await this._client
-        .api(`/users/${mailbox_id}/messages/${message_id}`)
-        .get()) as GraphDeltaMessage;
+      const response = await with_graph_retry(
+        () =>
+          this._client
+            .api(`/users/${mailbox_id}/messages/${message_id}`)
+            .get() as Promise<GraphDeltaMessage>,
+      );
 
       return this.graph_message_to_mail_message(response);
     } catch (err) {
@@ -194,7 +201,9 @@ export class GraphMailboxConnector implements MailboxConnector {
   ): Promise<MessageAttachment[]> {
     try {
       const url = `/users/${mailbox_id}/messages/${message_id}/attachments`;
-      const records = await this.collect_all_pages<GraphAttachmentRecord>(url);
+      const records = await with_graph_retry(() =>
+        this.collect_all_pages<GraphAttachmentRecord>(url),
+      );
       return map_file_attachments(records);
     } catch (err) {
       rethrow_if_mailbox_not_licensed(err);
@@ -223,11 +232,14 @@ export class GraphMailboxConnector implements MailboxConnector {
     folder_id: string,
     page_size: number,
   ): Promise<GraphPageResponse> {
-    return (await this._client
-      .api(this.delta_path(mailbox_id, folder_id))
-      .header('Prefer', `odata.maxpagesize=${page_size}`)
-      .select(DELTA_SELECT_FIELDS)
-      .get()) as GraphPageResponse;
+    return with_graph_retry(
+      () =>
+        this._client
+          .api(this.delta_path(mailbox_id, folder_id))
+          .header('Prefer', `odata.maxpagesize=${page_size}`)
+          .select(DELTA_SELECT_FIELDS)
+          .get() as Promise<GraphPageResponse>,
+    );
   }
 
   /**
@@ -238,10 +250,13 @@ export class GraphMailboxConnector implements MailboxConnector {
     full_url: string,
     page_size: number,
   ): Promise<GraphPageResponse> {
-    return (await this._client
-      .api(full_url)
-      .header('Prefer', `odata.maxpagesize=${page_size}`)
-      .get()) as GraphPageResponse;
+    return with_graph_retry(
+      () =>
+        this._client
+          .api(full_url)
+          .header('Prefer', `odata.maxpagesize=${page_size}`)
+          .get() as Promise<GraphPageResponse>,
+    );
   }
 
   /**
@@ -255,7 +270,7 @@ export class GraphMailboxConnector implements MailboxConnector {
     prev_delta_link: string | undefined,
     delta_reset: boolean,
     on_page?: DeltaPageCallback,
-    page_size = 25,
+    page_size = 10,
   ): Promise<DeltaSyncResult> {
     const is_initial = !prev_delta_link;
     const messages: MailMessage[] = [];

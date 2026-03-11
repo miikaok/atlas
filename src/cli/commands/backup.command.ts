@@ -35,7 +35,7 @@ export function register_backup_command(program: Command, get_container: Contain
     .option('-m, --mailbox <id>', 'specific mailbox to back up (backs up all if omitted)')
     .option('-f, --folder <name...>', 'specific folder(s) to back up (e.g. -f Inbox "Sent Items")')
     .option('--full', 'force a full backup, ignoring saved delta state from prior runs')
-    .option('-P, --page-size <n>', 'Graph API page size per delta request (1-100)', '25')
+    .option('-P, --page-size <n>', 'Graph API page size per delta request (1-100)', '10')
     .option('--retention-days <n>', 'apply object lock retention for N days')
     .option('--lock-mode <mode>', 'Object Lock mode: governance|compliance')
     .option('--require-immutability', 'fail when immutability cannot be enforced')

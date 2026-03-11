@@ -42,13 +42,13 @@ atlas backup -t <tenant-id> -m user@company.com       # explicit tenant
 | `-m, --mailbox <id>`     | Mailbox to back up                                   |
 | `-f, --folder <name...>` | Filter to specific folder(s) by display name         |
 | `--full`                 | Ignore saved delta links, run full enumeration       |
-| `-P, --page-size <n>`    | Graph API page size per delta request (1-100, default 25) |
+| `-P, --page-size <n>`    | Graph API page size per delta request (1-100, default 10) |
 | `--retention-days <n>`   | Apply Object Lock retention for `n` days             |
 | `--lock-mode <mode>`     | Object Lock mode (`governance` or `compliance`)      |
 | `--require-immutability` | Fail if immutability cannot be enforced              |
 | `-t, --tenant <id>`      | Override tenant ID from config                       |
 
-> **Page size tuning:** The `--page-size` flag controls how many messages are requested per Graph API delta page via the `Prefer: odata.maxpagesize` header. This is a *hint* -- the server may return fewer items when response payloads are large (e.g. messages with heavy HTML bodies or many inline images). Lower values reduce memory pressure and allow partial progress to be saved more frequently during interrupts. Higher values reduce HTTP round-trips but increase per-page processing time. The default of 25 is a balanced starting point; adjust based on your mailbox characteristics.
+> **Page size tuning:** The `--page-size` flag controls how many messages are requested per Graph API delta page via the `Prefer: odata.maxpagesize` header. This is a *hint* -- the server may return fewer items when response payloads are large (e.g. messages with heavy HTML bodies or many inline images). Lower values reduce memory pressure and allow partial progress to be saved more frequently during interrupts. Higher values reduce HTTP round-trips but increase per-page processing time. The default of 10 is a conservative starting point that works well across most mailbox sizes; increase if you have many small messages and want fewer HTTP round-trips.
 
 > **Immutability behavior:** `--retention-days` makes the backup immutable-requested. Atlas resolves retention to an internal UTC `retain_until`, probes bucket capability (versioning + Object Lock), and fails fast when unsupported instead of silently downgrading to mutable writes.
 
