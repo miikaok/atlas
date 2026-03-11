@@ -35,7 +35,7 @@ export function register_backup_command(program: Command, get_container: Contain
     .option('-m, --mailbox <id>', 'specific mailbox to back up (backs up all if omitted)')
     .option('-f, --folder <name...>', 'specific folder(s) to back up (e.g. -f Inbox "Sent Items")')
     .option('--full', 'force a full backup, ignoring saved delta state from prior runs')
-    .option('-P, --page-size <n>', 'Graph API page size per delta request (1-100)', '25')
+    .option('-P, --page-size <n>', 'Graph API page size per delta request (1-100)', '10')
     .option('--retention-days <n>', 'apply object lock retention for N days')
     .option('--lock-mode <mode>', 'Object Lock mode: governance|compliance')
     .option('--require-immutability', 'fail when immutability cannot be enforced')
@@ -51,7 +51,7 @@ function resolve_tenant_id(container: Container, options: BackupOptions): string
 
 /** Builds SyncOptions from CLI flags. */
 function build_sync_options(options: BackupOptions): SyncOptions {
-  const page_size = Math.max(1, Math.min(100, parseInt(options.pageSize ?? '25', 10) || 25));
+  const page_size = Math.max(1, Math.min(100, parseInt(options.pageSize ?? '10', 10) || 10));
   const object_lock_request = build_object_lock_request(options);
   const object_lock_policy = build_object_lock_policy(options);
   return {

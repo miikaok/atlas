@@ -7,6 +7,7 @@ import type { RestoreUseCase, RestoreResult } from '@/ports/restore/use-case.por
 import type { CatalogUseCase, MailboxSummary } from '@/ports/catalog/use-case.port';
 import type { DeletionUseCase, DeletionResult } from '@/ports/deletion/use-case.port';
 import type { StorageCheckUseCase, StorageCheckResult } from '@/ports/storage-check/use-case.port';
+import type { SaveUseCase, SaveResult } from '@/ports/save/use-case.port';
 import type { Manifest } from '@/domain/manifest';
 
 const TENANT_ID = 'test-tenant-id';
@@ -39,6 +40,10 @@ const mock_deletion: DeletionUseCase = {
   purge_tenant: vi.fn(),
 };
 const mock_storage_check: StorageCheckUseCase = { check_storage: vi.fn() };
+const mock_save: SaveUseCase = {
+  save_snapshot: vi.fn(),
+  save_mailbox: vi.fn(),
+};
 
 vi.mock('@/container', () => ({
   create_container_from_config: vi.fn(() => ({
@@ -51,6 +56,7 @@ vi.mock('@/container', () => ({
         CatalogUseCase: mock_catalog,
         DeletionUseCase: mock_deletion,
         StorageCheckUseCase: mock_storage_check,
+        SaveUseCase: mock_save,
       };
       return map[key!];
     }),
@@ -178,6 +184,42 @@ describe('createAtlasInstance', () => {
         'user@test.com',
         undefined,
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // saveSnapshot
+  // ---------------------------------------------------------------------------
+
+  describe('saveSnapshot', () => {
+    it('delegates to SaveUseCase.save_snapshot with bound tenant_id', async () => {
+      const save_result = { saved_count: 7 } as unknown as SaveResult;
+      vi.mocked(mock_save.save_snapshot).mockResolvedValue(save_result);
+
+      const result = await atlas.saveSnapshot('snap-1', { folder_name: 'Inbox' });
+
+      expect(result).toBe(save_result);
+      expect(mock_save.save_snapshot).toHaveBeenCalledWith(TENANT_ID, 'snap-1', {
+        folder_name: 'Inbox',
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // saveMailbox
+  // ---------------------------------------------------------------------------
+
+  describe('saveMailbox', () => {
+    it('delegates to SaveUseCase.save_mailbox with bound tenant_id', async () => {
+      const save_result = { saved_count: 40 } as unknown as SaveResult;
+      vi.mocked(mock_save.save_mailbox).mockResolvedValue(save_result);
+
+      const result = await atlas.saveMailbox('user@test.com', { output_path: 'out.zip' });
+
+      expect(result).toBe(save_result);
+      expect(mock_save.save_mailbox).toHaveBeenCalledWith(TENANT_ID, 'user@test.com', {
+        output_path: 'out.zip',
+      });
     });
   });
 
@@ -317,11 +359,15 @@ describe('createAtlasInstance', () => {
       vi.mocked(mock_deletion.delete_mailbox_data).mockResolvedValue({} as DeletionResult);
       vi.mocked(mock_deletion.delete_snapshot).mockResolvedValue({} as DeletionResult);
       vi.mocked(mock_storage_check.check_storage).mockResolvedValue({} as StorageCheckResult);
+      vi.mocked(mock_save.save_snapshot).mockResolvedValue({} as SaveResult);
+      vi.mocked(mock_save.save_mailbox).mockResolvedValue({} as SaveResult);
 
       expect(atlas.backupMailbox('m')).toBeInstanceOf(Promise);
       expect(atlas.verifySnapshot('s')).toBeInstanceOf(Promise);
       expect(atlas.restoreSnapshot('s')).toBeInstanceOf(Promise);
       expect(atlas.restoreMailbox('m')).toBeInstanceOf(Promise);
+      expect(atlas.saveSnapshot('s')).toBeInstanceOf(Promise);
+      expect(atlas.saveMailbox('m')).toBeInstanceOf(Promise);
       expect(atlas.listMailboxes()).toBeInstanceOf(Promise);
       expect(atlas.listSnapshots('m')).toBeInstanceOf(Promise);
       expect(atlas.getSnapshotDetail('s')).toBeInstanceOf(Promise);

@@ -7,8 +7,11 @@ import type {
   UploadSession,
 } from '@/ports/restore/connector.port';
 import type { MailFolder } from '@/ports/mailbox/connector.port';
-import { rethrow_if_access_denied } from './graph-error-helpers';
-import { with_graph_retry } from './graph-error-helpers';
+import {
+  rethrow_if_access_denied,
+  rethrow_if_mailbox_not_licensed,
+  with_graph_retry,
+} from './graph-error-helpers';
 import { logger } from '@/utils/logger';
 
 const LARGE_ATTACHMENT_THRESHOLD = 3 * 1024 * 1024;
@@ -57,6 +60,7 @@ export class GraphRestoreConnector implements RestoreConnector {
         total_item_count: response.totalItemCount ?? 0,
       };
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }
@@ -79,6 +83,7 @@ export class GraphRestoreConnector implements RestoreConnector {
       if (!response.id) throw new Error('Graph returned no message ID after create');
       return response.id;
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }
@@ -108,6 +113,7 @@ export class GraphRestoreConnector implements RestoreConnector {
     try {
       await with_graph_retry(() => this._client.api(url).post(payload));
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }
@@ -138,6 +144,7 @@ export class GraphRestoreConnector implements RestoreConnector {
       if (!response.uploadUrl) throw new Error('Graph returned no uploadUrl for session');
       return { upload_url: response.uploadUrl, expiration: response.expirationDateTime ?? '' };
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }

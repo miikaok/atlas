@@ -10,9 +10,22 @@ import type {
   DeltaPageCallback,
 } from '@/ports/mailbox/connector.port';
 import { logger } from '@/utils/logger';
-import { is_invalid_delta_error, rethrow_if_access_denied } from './graph-error-helpers';
-
-const EXCLUDED_FOLDERS = new Set(['drafts', 'outbox', 'recoverableitemsdeletions', 'junkemail']);
+import {
+  is_invalid_delta_error,
+  rethrow_if_access_denied,
+  rethrow_if_mailbox_not_licensed,
+  with_graph_retry,
+} from './graph-error-helpers';
+import type {
+  GraphUserRecord,
+  GraphFolderRecord,
+  GraphAttachmentRecord,
+} from './graph-mailbox-response-mappers';
+import {
+  extract_user_ids,
+  filter_and_map_folders,
+  map_file_attachments,
+} from './graph-mailbox-response-mappers';
 
 /**
  * Fields to request from the delta endpoint so each page contains
@@ -50,19 +63,6 @@ interface GraphPageResponse {
   '@odata.deltaLink'?: string;
 }
 
-interface GraphUserRecord {
-  id?: string;
-  mail?: string;
-  displayName?: string;
-}
-
-interface GraphFolderRecord {
-  id?: string;
-  displayName?: string;
-  parentFolderId?: string;
-  totalItemCount?: number;
-}
-
 interface GraphDeltaMessage {
   id?: string;
   subject?: string;
@@ -72,16 +72,6 @@ interface GraphDeltaMessage {
   parentFolderId?: string;
   '@removed'?: { reason: string };
   [key: string]: unknown;
-}
-
-interface GraphAttachmentRecord {
-  '@odata.type'?: string;
-  id?: string;
-  name?: string;
-  contentType?: string;
-  size?: number;
-  isInline?: boolean;
-  contentBytes?: string;
 }
 
 @injectable()
@@ -95,9 +85,23 @@ export class GraphMailboxConnector implements MailboxConnector {
   async list_mailboxes(_tenant_id: string): Promise<string[]> {
     try {
       const url = '/users?$select=id,mail,displayName&$filter=mail ne null&$top=999';
-      const user_records = await this.collect_all_pages<GraphUserRecord>(url);
-      return this.extract_user_ids(user_records);
+      const user_records = await with_graph_retry(() =>
+        this.collect_all_pages<GraphUserRecord>(url),
+      );
+      return extract_user_ids(user_records);
     } catch (err) {
+      rethrow_if_access_denied(err);
+      throw err;
+    }
+  }
+
+  /** Checks whether a mailbox exists in the tenant via GET /users/{id}. */
+  async mailbox_exists(_tenant_id: string, mailbox_id: string): Promise<boolean> {
+    try {
+      await with_graph_retry(() => this._client.api(`/users/${mailbox_id}?$select=id`).get());
+      return true;
+    } catch (err) {
+      if ((err as Record<string, unknown>).statusCode === 404) return false;
       rethrow_if_access_denied(err);
       throw err;
     }
@@ -112,9 +116,12 @@ export class GraphMailboxConnector implements MailboxConnector {
       const url =
         `/users/${mailbox_id}/mailFolders` +
         '?$select=id,displayName,parentFolderId,totalItemCount&$top=250';
-      const folder_records = await this.collect_all_pages<GraphFolderRecord>(url);
-      return this.filter_and_map_folders(folder_records);
+      const folder_records = await with_graph_retry(() =>
+        this.collect_all_pages<GraphFolderRecord>(url),
+      );
+      return filter_and_map_folders(folder_records);
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }
@@ -138,7 +145,7 @@ export class GraphMailboxConnector implements MailboxConnector {
         ? `fetch_delta: resuming from saved delta link`
         : `fetch_delta: starting initial full sync`,
     );
-    const ps = page_size ?? 25;
+    const ps = page_size ?? 10;
 
     try {
       return await this.execute_delta_sync(
@@ -150,6 +157,7 @@ export class GraphMailboxConnector implements MailboxConnector {
         ps,
       );
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       if (is_invalid_delta_error(err)) {
         logger.debug('fetch_delta: invalid delta token, falling back to full sync');
@@ -166,12 +174,16 @@ export class GraphMailboxConnector implements MailboxConnector {
     message_id: string,
   ): Promise<MailMessage> {
     try {
-      const response = (await this._client
-        .api(`/users/${mailbox_id}/messages/${message_id}`)
-        .get()) as GraphDeltaMessage;
+      const response = await with_graph_retry(
+        () =>
+          this._client
+            .api(`/users/${mailbox_id}/messages/${message_id}`)
+            .get() as Promise<GraphDeltaMessage>,
+      );
 
       return this.graph_message_to_mail_message(response);
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }
@@ -189,48 +201,15 @@ export class GraphMailboxConnector implements MailboxConnector {
   ): Promise<MessageAttachment[]> {
     try {
       const url = `/users/${mailbox_id}/messages/${message_id}/attachments`;
-      const records = await this.collect_all_pages<GraphAttachmentRecord>(url);
-      return this.map_file_attachments(records);
+      const records = await with_graph_retry(() =>
+        this.collect_all_pages<GraphAttachmentRecord>(url),
+      );
+      return map_file_attachments(records);
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }
-  }
-
-  /** Filters to fileAttachment, decodes base64 content, warns on missing bytes. */
-  private map_file_attachments(records: GraphAttachmentRecord[]): MessageAttachment[] {
-    const results: MessageAttachment[] = [];
-
-    for (const r of records) {
-      if (r['@odata.type'] !== '#microsoft.graph.fileAttachment') continue;
-
-      if (!r.contentBytes) {
-        logger.warn(
-          `Attachment "${r.name ?? '?'}" (${r.size ?? 0} bytes) has no contentBytes -- ` +
-            `likely exceeds Graph API inline limit (>4MB). Metadata recorded, binary skipped.`,
-        );
-        results.push({
-          attachment_id: r.id ?? '',
-          name: r.name ?? '',
-          content_type: r.contentType ?? 'application/octet-stream',
-          size_bytes: r.size ?? 0,
-          is_inline: r.isInline === true,
-          content: Buffer.alloc(0),
-        });
-        continue;
-      }
-
-      results.push({
-        attachment_id: r.id ?? '',
-        name: r.name ?? '',
-        content_type: r.contentType ?? 'application/octet-stream',
-        size_bytes: r.size ?? 0,
-        is_inline: r.isInline === true,
-        content: Buffer.from(r.contentBytes, 'base64'),
-      });
-    }
-
-    return results;
   }
 
   // ---------------------------------------------------------------------------
@@ -253,11 +232,14 @@ export class GraphMailboxConnector implements MailboxConnector {
     folder_id: string,
     page_size: number,
   ): Promise<GraphPageResponse> {
-    return (await this._client
-      .api(this.delta_path(mailbox_id, folder_id))
-      .header('Prefer', `odata.maxpagesize=${page_size}`)
-      .select(DELTA_SELECT_FIELDS)
-      .get()) as GraphPageResponse;
+    return with_graph_retry(
+      () =>
+        this._client
+          .api(this.delta_path(mailbox_id, folder_id))
+          .header('Prefer', `odata.maxpagesize=${page_size}`)
+          .select(DELTA_SELECT_FIELDS)
+          .get() as Promise<GraphPageResponse>,
+    );
   }
 
   /**
@@ -268,10 +250,13 @@ export class GraphMailboxConnector implements MailboxConnector {
     full_url: string,
     page_size: number,
   ): Promise<GraphPageResponse> {
-    return (await this._client
-      .api(full_url)
-      .header('Prefer', `odata.maxpagesize=${page_size}`)
-      .get()) as GraphPageResponse;
+    return with_graph_retry(
+      () =>
+        this._client
+          .api(full_url)
+          .header('Prefer', `odata.maxpagesize=${page_size}`)
+          .get() as Promise<GraphPageResponse>,
+    );
   }
 
   /**
@@ -285,7 +270,7 @@ export class GraphMailboxConnector implements MailboxConnector {
     prev_delta_link: string | undefined,
     delta_reset: boolean,
     on_page?: DeltaPageCallback,
-    page_size = 25,
+    page_size = 10,
   ): Promise<DeltaSyncResult> {
     const is_initial = !prev_delta_link;
     const messages: MailMessage[] = [];
@@ -362,22 +347,5 @@ export class GraphMailboxConnector implements MailboxConnector {
     }
 
     return all_items;
-  }
-
-  /** Extracts non-null user IDs from Graph user records. */
-  private extract_user_ids(users: GraphUserRecord[]): string[] {
-    return users.filter((u) => u.id).map((u) => u.id!);
-  }
-
-  /** Filters out excluded system folders and maps to our MailFolder type. */
-  private filter_and_map_folders(folders: GraphFolderRecord[]): MailFolder[] {
-    return folders
-      .filter((f) => f.id && !EXCLUDED_FOLDERS.has((f.displayName ?? '').toLowerCase()))
-      .map((f) => ({
-        folder_id: f.id!,
-        display_name: f.displayName ?? '',
-        parent_folder_id: f.parentFolderId ?? undefined,
-        total_item_count: f.totalItemCount ?? 0,
-      }));
   }
 }

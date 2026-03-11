@@ -1,6 +1,20 @@
+import { logger } from '@/utils/logger';
+
 const RETRYABLE_STATUS_CODES = new Set([429, 503, 504]);
-const MAX_RETRIES = 4;
+const NETWORK_ERROR_CODES = new Set([
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EPIPE',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+const MAX_RETRIES = 6;
 const BASE_DELAY_MS = 1000;
+const MAX_DELAY_MS = 60_000;
 
 /**
  * Detects Graph errors that indicate an invalid/expired delta token.
@@ -43,6 +57,30 @@ export function rethrow_if_access_denied(err: unknown): void {
   throw new Error(hint);
 }
 
+/**
+ * Detects MailboxNotEnabledForRESTAPI from Graph and rethrows with
+ * actionable guidance about reassigning an Exchange Online license.
+ */
+export function rethrow_if_mailbox_not_licensed(err: unknown): void {
+  const graph_err = err as Record<string, unknown>;
+  const code = String(graph_err.code ?? '');
+  const message = err instanceof Error ? err.message : String(err);
+
+  if (code === 'MailboxNotEnabledForRESTAPI' || message.includes('MailboxNotEnabledForRESTAPI')) {
+    throw new Error(
+      `The mailbox is not licensed for API access (MailboxNotEnabledForRESTAPI).\n` +
+        `This typically happens when the user's Exchange Online license has been removed.\n` +
+        `The mailbox data is retained for 30 days after license removal, but cannot be\n` +
+        `accessed via the Graph API until a license is reassigned.\n\n` +
+        `To back up or restore this mailbox:\n` +
+        `  1. Reassign an Exchange Online license to the user in Microsoft 365 admin center\n` +
+        `  2. Wait a few minutes for the mailbox to reconnect\n` +
+        `  3. Run the operation again\n` +
+        `  4. Remove the license after the operation completes (if desired)`,
+    );
+  }
+}
+
 /** Returns true when the error carries a transient HTTP status (429, 503, 504). */
 export function is_transient_error(err: unknown): boolean {
   const status = (err as Record<string, unknown>).statusCode;
@@ -50,18 +88,57 @@ export function is_transient_error(err: unknown): boolean {
 }
 
 /**
- * Wraps a Graph API call with exponential backoff retries for transient errors.
- * Respects the Retry-After header from 429 responses when available.
+ * Returns true for network-level errors (socket timeout, DNS failure,
+ * connection reset) that are worth retrying.
+ */
+export function is_network_error(err: unknown): boolean {
+  const code = (err as Record<string, unknown>).code;
+  if (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) return true;
+
+  const message = err instanceof Error ? err.message : String(err);
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('socket hang up') ||
+    lower.includes('network request failed') ||
+    lower.includes('econnreset') ||
+    lower.includes('etimedout') ||
+    lower.includes('fetch failed')
+  );
+}
+
+/** Returns true when an error is retryable (transient HTTP or network error). */
+export function is_retryable_error(err: unknown): boolean {
+  return is_transient_error(err) || is_network_error(err);
+}
+
+/**
+ * Wraps any async network call with exponential backoff + jitter for both
+ * transient HTTP errors (429, 503, 504) and network-level errors (ETIMEDOUT,
+ * ECONNRESET, socket hang up, etc.).
+ *
+ * Retries up to MAX_RETRIES times. Respects Retry-After on 429. Delays are
+ * capped at MAX_DELAY_MS. Each retry is logged for observability.
+ *
+ * This function is designed to be reusable across backup, restore, save, and
+ * any other operation that communicates over the network.
  */
 export async function with_graph_retry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await fn();
     } catch (err) {
-      if (!is_transient_error(err) || attempt === MAX_RETRIES) throw err;
+      if (!is_retryable_error(err) || attempt === MAX_RETRIES) throw err;
 
       const retry_after = extract_retry_after(err);
-      const delay = retry_after ?? BASE_DELAY_MS * 2 ** attempt;
+      const base = retry_after ?? BASE_DELAY_MS * 2 ** attempt;
+      const jitter = Math.random() * BASE_DELAY_MS;
+      const delay = Math.min(base + jitter, MAX_DELAY_MS);
+
+      const reason = describe_error(err);
+      logger.debug(
+        `Retry ${attempt + 1}/${MAX_RETRIES} in ${(delay / 1000).toFixed(1)}s -- ${reason}`,
+      );
+
       await sleep(delay);
     }
   }
@@ -76,6 +153,13 @@ function extract_retry_after(err: unknown): number | undefined {
   if (!value) return undefined;
   const seconds = parseInt(value, 10);
   return isNaN(seconds) ? undefined : seconds * 1000;
+}
+
+function describe_error(err: unknown): string {
+  const graph_err = err as Record<string, unknown>;
+  if (graph_err.statusCode) return `HTTP ${graph_err.statusCode}`;
+  if (graph_err.code) return String(graph_err.code);
+  return err instanceof Error ? err.message.slice(0, 80) : 'unknown';
 }
 
 function sleep(ms: number): Promise<void> {

@@ -89,6 +89,7 @@ describe('RestoreService', () => {
 
     mock_connector = {
       list_mailboxes: vi.fn(),
+      mailbox_exists: vi.fn().mockResolvedValue(true),
       list_mail_folders: vi.fn().mockResolvedValue(folders),
       fetch_delta: vi.fn(),
       fetch_message: vi.fn(),
@@ -119,6 +120,29 @@ describe('RestoreService', () => {
     container.bind(RestoreService).toSelf();
 
     service = container.get(RestoreService);
+  });
+
+  it('throws when target mailbox does not exist', async () => {
+    const manifest = make_manifest([make_entry('msg-1', 'f1')]);
+    (mock_manifests.find_by_snapshot as ReturnType<typeof vi.fn>).mockResolvedValue(manifest);
+    (mock_connector.mailbox_exists as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+    await expect(
+      service.restore_snapshot('test-tenant', 'snap-1', { target_mailbox: 'nobody@test.com' }),
+    ).rejects.toThrow('does not exist in the tenant');
+
+    expect(mock_restore.create_mail_folder).not.toHaveBeenCalled();
+    expect(mock_restore.create_message).not.toHaveBeenCalled();
+  });
+
+  it('throws when source mailbox does not exist (no target override)', async () => {
+    const manifest = make_manifest([make_entry('msg-1', 'f1')]);
+    (mock_manifests.find_by_snapshot as ReturnType<typeof vi.fn>).mockResolvedValue(manifest);
+    (mock_connector.mailbox_exists as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+    await expect(service.restore_snapshot('test-tenant', 'snap-1')).rejects.toThrow(
+      'does not exist in the tenant',
+    );
   });
 
   it('throws when manifest not found', async () => {
@@ -204,6 +228,18 @@ describe('RestoreService', () => {
   });
 
   describe('restore_mailbox', () => {
+    it('throws when target mailbox does not exist', async () => {
+      (mock_connector.mailbox_exists as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+      await expect(
+        service.restore_mailbox('test-tenant', 'user@test.com', {
+          target_mailbox: 'nobody@test.com',
+        }),
+      ).rejects.toThrow('does not exist in the tenant');
+
+      expect(mock_restore.create_mail_folder).not.toHaveBeenCalled();
+    });
+
     it('returns empty when no snapshots for mailbox', async () => {
       (mock_manifests.list_all_manifests as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 

@@ -72,6 +72,7 @@ describe('MailboxSyncService – attachment backup', () => {
 
     mock_connector = {
       list_mailboxes: vi.fn().mockResolvedValue([]),
+      mailbox_exists: vi.fn().mockResolvedValue(true),
       list_mail_folders: vi
         .fn()
         .mockResolvedValue([
