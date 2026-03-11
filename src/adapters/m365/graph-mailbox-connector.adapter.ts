@@ -13,6 +13,7 @@ import { logger } from '@/utils/logger';
 import {
   is_invalid_delta_error,
   rethrow_if_access_denied,
+  rethrow_if_mailbox_not_licensed,
   with_graph_retry,
 } from './graph-error-helpers';
 import type {
@@ -116,6 +117,7 @@ export class GraphMailboxConnector implements MailboxConnector {
       const folder_records = await this.collect_all_pages<GraphFolderRecord>(url);
       return filter_and_map_folders(folder_records);
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }
@@ -151,6 +153,7 @@ export class GraphMailboxConnector implements MailboxConnector {
         ps,
       );
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       if (is_invalid_delta_error(err)) {
         logger.debug('fetch_delta: invalid delta token, falling back to full sync');
@@ -173,6 +176,7 @@ export class GraphMailboxConnector implements MailboxConnector {
 
       return this.graph_message_to_mail_message(response);
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }
@@ -193,6 +197,7 @@ export class GraphMailboxConnector implements MailboxConnector {
       const records = await this.collect_all_pages<GraphAttachmentRecord>(url);
       return map_file_attachments(records);
     } catch (err) {
+      rethrow_if_mailbox_not_licensed(err);
       rethrow_if_access_denied(err);
       throw err;
     }

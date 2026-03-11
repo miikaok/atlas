@@ -43,6 +43,30 @@ export function rethrow_if_access_denied(err: unknown): void {
   throw new Error(hint);
 }
 
+/**
+ * Detects MailboxNotEnabledForRESTAPI from Graph and rethrows with
+ * actionable guidance about reassigning an Exchange Online license.
+ */
+export function rethrow_if_mailbox_not_licensed(err: unknown): void {
+  const graph_err = err as Record<string, unknown>;
+  const code = String(graph_err.code ?? '');
+  const message = err instanceof Error ? err.message : String(err);
+
+  if (code === 'MailboxNotEnabledForRESTAPI' || message.includes('MailboxNotEnabledForRESTAPI')) {
+    throw new Error(
+      `The mailbox is not licensed for API access (MailboxNotEnabledForRESTAPI).\n` +
+        `This typically happens when the user's Exchange Online license has been removed.\n` +
+        `The mailbox data is retained for 30 days after license removal, but cannot be\n` +
+        `accessed via the Graph API until a license is reassigned.\n\n` +
+        `To back up or restore this mailbox:\n` +
+        `  1. Reassign an Exchange Online license to the user in Microsoft 365 admin center\n` +
+        `  2. Wait a few minutes for the mailbox to reconnect\n` +
+        `  3. Run the operation again\n` +
+        `  4. Remove the license after the operation completes (if desired)`,
+    );
+  }
+}
+
 /** Returns true when the error carries a transient HTTP status (429, 503, 504). */
 export function is_transient_error(err: unknown): boolean {
   const status = (err as Record<string, unknown>).statusCode;

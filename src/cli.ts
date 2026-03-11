@@ -67,7 +67,7 @@ function log_s3_connection_hint(err: Record<string, unknown>, message: string): 
     code === 'ENOTFOUND' ||
     code === 'ETIMEDOUT' ||
     lower_message.includes('econnrefused') ||
-    lower_message.includes('connect') ||
+    lower_message.includes('econnreset') ||
     lower_message.includes('socket hang up');
 
   if (!is_connection_error) return;
