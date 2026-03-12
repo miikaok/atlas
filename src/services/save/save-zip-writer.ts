@@ -42,8 +42,16 @@ export function add_eml_to_archive(
 ): Promise<void> {
   const entry_path = `${sanitize_path_segment(folder_name)}/${filename}`;
   return new Promise<void>((resolve, reject) => {
-    archive.once('entry', () => resolve());
-    archive.once('error', reject);
+    const on_entry = (): void => {
+      archive.removeListener('error', on_error);
+      resolve();
+    };
+    const on_error = (err: Error): void => {
+      archive.removeListener('entry', on_entry);
+      reject(err);
+    };
+    archive.once('entry', on_entry);
+    archive.once('error', on_error);
     archive.append(content, { name: entry_path });
   });
 }

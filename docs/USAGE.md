@@ -54,7 +54,7 @@ atlas backup -t <tenant-id> -m user@company.com       # explicit tenant
 
 ### `atlas storage-check`
 
-Validate immutable backup readiness without running a backup.
+Validate immutable backup readiness without running a backup. Reports versioning and Object Lock status.
 
 ```bash
 atlas storage-check
@@ -209,7 +209,7 @@ Delete backed-up data with confirmation prompt.
 
 ```bash
 atlas delete -m user@company.com        # delete all data + manifests for a mailbox
-atlas delete -s <snapshot-id>           # delete one snapshot manifest (data objects retained)
+atlas delete -s <snapshot-id>           # delete one snapshot manifest (data retained)
 atlas delete --purge                    # delete EVERYTHING in the tenant bucket
 atlas delete --purge -y                 # skip confirmation prompt
 ```
@@ -217,7 +217,7 @@ atlas delete --purge -y                 # skip confirmation prompt
 | Option                  | Description                                                    |
 | ----------------------- | -------------------------------------------------------------- |
 | `-m, --mailbox <email>` | Delete all data, attachments, and manifests for a mailbox      |
-| `-s, --snapshot <id>`   | Delete a single snapshot manifest                              |
+| `-s, --snapshot <id>`   | Delete a single snapshot manifest (data objects retained)       |
 | `--purge`               | Delete all data, manifests, and encryption keys (irreversible) |
 | `-y, --yes`             | Skip confirmation prompt                                       |
 | `-t, --tenant <id>`     | Override tenant ID                                             |

@@ -178,15 +178,20 @@ If immutable backup is requested and these checks fail, Atlas aborts with explic
 - Object Lock unsupported/disabled
 - backend rejected requested mode/headers
 
-### Deduplication + retention semantics (v1)
+### Deduplication + retention semantics
 
-Atlas uses content-addressed storage. If an object already exists:
+Atlas uses content-addressed storage (`data/{mailbox}/{sha256}`). Deduplication is identical with or without Object Lock -- if the object already exists, Atlas skips the upload. No extra storage cost, no extra S3 versions.
 
-- Atlas **reuses** it,
-- does **not** re-upload,
-- does **not** extend retention on existing versions.
+Object Lock **prevents** deletion during the retention window but does **not** auto-delete objects after retention expires. Since Atlas never selectively deletes individual data objects (only bulk via `delete --mailbox` or `delete --purge`), there is no risk of a manifest referencing a deleted object. Manifests are always deleted before data objects, so an interrupted deletion leaves harmless orphan data rather than dangling manifest references.
 
-This means newer snapshots can reference older versions whose retention window was anchored at first write. Atlas records requested/effective snapshot policy, but per-object enforcement follows actual stored object versions.
+**Best-effort housekeeping rules.** When Atlas creates a new bucket, it attempts to configure lifecycle rules that work on both AWS S3 and MinIO:
+
+| Rule | Purpose |
+|------|---------|
+| `AbortIncompleteMultipartUpload` (7 days) | Prevents abandoned upload parts from accumulating |
+| `ExpiredObjectDeleteMarker` | Removes orphaned delete markers left after version-aware deletion |
+
+These rules are best-effort -- if the storage backend does not support lifecycle configuration, Atlas continues without them.
 
 ### Operational notes
 
