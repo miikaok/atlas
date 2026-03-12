@@ -22,7 +22,7 @@ export function build_eml(
   const msg = createMimeMessage();
 
   const from = extract_email_address(message_json['from'] as GraphRecipient | undefined);
-  if (from) msg.setSender(from);
+  msg.setSender(from ?? { name: '', addr: 'unknown@localhost' });
 
   const to = extract_recipient_list(message_json['toRecipients'] as GraphRecipient[] | undefined);
   if (to.length > 0) msg.setTo(to);
@@ -128,10 +128,9 @@ function set_message_id_header(
 
 function add_body(msg: ReturnType<typeof createMimeMessage>, json: Record<string, unknown>): void {
   const body = json['body'] as { contentType?: string; content?: string } | undefined;
-  if (!body?.content) return;
-
-  const content_type = body.contentType?.toLowerCase() === 'html' ? 'text/html' : 'text/plain';
-  msg.addMessage({ contentType: content_type, data: body.content });
+  const content = body?.content ?? '';
+  const content_type = body?.contentType?.toLowerCase() === 'html' ? 'text/html' : 'text/plain';
+  msg.addMessage({ contentType: content_type, data: content || ' ' });
 }
 
 function format_timestamp(date_str: string | undefined): string {
