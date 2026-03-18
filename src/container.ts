@@ -14,6 +14,7 @@ import {
   DELETION_USE_CASE_TOKEN,
   STORAGE_CHECK_USE_CASE_TOKEN,
   SAVE_USE_CASE_TOKEN,
+  STATS_USE_CASE_TOKEN,
 } from '@/ports/tokens/use-case.tokens';
 import { GraphMailboxConnector } from '@/adapters/m365/graph-mailbox-connector.adapter';
 import { GraphRestoreConnector } from '@/adapters/m365/graph-restore-connector.adapter';
@@ -28,6 +29,7 @@ import { CatalogService } from '@/services/catalog/catalog.service';
 import { DeletionService } from '@/services/deletion/deletion.service';
 import { StorageCheckService } from '@/services/storage-check/storage-check.service';
 import { SaveService } from '@/services/save/save.service';
+import { StatsService } from '@/services/stats/stats.service';
 import type { AtlasConfig } from '@/utils/config';
 import { load_config, ATLAS_CONFIG_TOKEN } from '@/utils/config';
 
@@ -87,4 +89,6 @@ function bind_services(container: Container): void {
   container.bind(STORAGE_CHECK_USE_CASE_TOKEN).toService(StorageCheckService);
   container.bind(SaveService).toSelf();
   container.bind(SAVE_USE_CASE_TOKEN).toService(SaveService);
+  container.bind(StatsService).toSelf();
+  container.bind(STATS_USE_CASE_TOKEN).toService(StatsService);
 }
