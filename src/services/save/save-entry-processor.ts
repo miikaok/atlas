@@ -18,6 +18,7 @@ interface DecryptedAttachment {
   readonly content_type: string;
   readonly content: Buffer;
   readonly is_inline: boolean;
+  readonly content_id?: string;
 }
 
 /**
@@ -197,6 +198,7 @@ async function decrypt_entry_attachments(
         content_type: att.content_type,
         content,
         is_inline: att.is_inline,
+        ...(att.content_id ? { content_id: att.content_id } : {}),
       });
     } catch (err) {
       logger.warn(

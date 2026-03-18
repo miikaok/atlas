@@ -24,6 +24,7 @@ export interface GraphAttachmentRecord {
   size?: number;
   isInline?: boolean;
   contentBytes?: string;
+  contentId?: string;
 }
 
 /** Extracts non-null user IDs from Graph user records. */
@@ -62,6 +63,7 @@ export function map_file_attachments(records: GraphAttachmentRecord[]): MessageA
         size_bytes: r.size ?? 0,
         is_inline: r.isInline === true,
         content: Buffer.alloc(0),
+        content_id: r.contentId ?? '',
       });
       continue;
     }
@@ -73,6 +75,7 @@ export function map_file_attachments(records: GraphAttachmentRecord[]): MessageA
       size_bytes: r.size ?? 0,
       is_inline: r.isInline === true,
       content: Buffer.from(r.contentBytes, 'base64'),
+      content_id: r.contentId ?? '',
     });
   }
 

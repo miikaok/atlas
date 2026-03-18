@@ -9,6 +9,7 @@ interface DecryptedAttachment {
   readonly content_type: string;
   readonly content: Buffer;
   readonly is_inline: boolean;
+  readonly content_id?: string;
 }
 
 /**
@@ -42,11 +43,16 @@ export function build_eml(
   add_body(msg, message_json);
 
   for (const att of attachments) {
+    const headers: Record<string, string> = {};
+    if (att.is_inline && att.content_id) {
+      headers['Content-ID'] = att.content_id;
+    }
     msg.addAttachment({
       filename: att.name,
       contentType: att.content_type,
       data: att.content.toString('base64'),
       inline: att.is_inline,
+      headers,
     });
   }
 

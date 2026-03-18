@@ -113,6 +113,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 1024,
         is_inline: false,
         content: Buffer.from('pdf-content'),
+        content_id: '',
       },
     ]);
 
@@ -148,6 +149,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: same_content.length,
         is_inline: false,
         content: same_content,
+        content_id: '',
       },
     ]);
 
@@ -180,6 +182,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 50_000_000,
         is_inline: false,
         content: Buffer.alloc(0),
+        content_id: '',
       },
     ]);
 
@@ -202,6 +205,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 512,
         is_inline: false,
         content: Buffer.from('secret-doc-content'),
+        content_id: '',
       },
     ]);
 
@@ -225,6 +229,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 100,
         is_inline: false,
         content: Buffer.from('pdf-a'),
+        content_id: '',
       },
       {
         attachment_id: 'att-2',
@@ -233,6 +238,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 200,
         is_inline: false,
         content: Buffer.from('png-b'),
+        content_id: '',
       },
     ]);
 
@@ -252,6 +258,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 5000,
         is_inline: false,
         content: Buffer.from('bin-data'),
+        content_id: '',
       },
     ]);
 
@@ -272,6 +279,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 100,
         is_inline: false,
         content: Buffer.from('pdf-a'),
+        content_id: '',
       },
       {
         attachment_id: 'att-b',
@@ -280,6 +288,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 200,
         is_inline: true,
         content: Buffer.from('png-b'),
+        content_id: 'image001.png@01DA3B2F',
       },
     ]);
 
@@ -289,6 +298,8 @@ describe('MailboxSyncService – attachment backup', () => {
     expect(result.manifest.entries[0]!.attachments![0]!.name).toBe('a.pdf');
     expect(result.manifest.entries[0]!.attachments![1]!.name).toBe('b.png');
     expect(result.manifest.entries[0]!.attachments![1]!.is_inline).toBe(true);
+    expect(result.manifest.entries[0]!.attachments![1]!.content_id).toBe('image001.png@01DA3B2F');
+    expect(result.manifest.entries[0]!.attachments![0]!.content_id).toBeUndefined();
   });
 
   it('passes object lock policy to newly uploaded attachments', async () => {
@@ -302,6 +313,7 @@ describe('MailboxSyncService – attachment backup', () => {
         size_bytes: 8,
         is_inline: false,
         content: Buffer.from('lockdata'),
+        content_id: '',
       },
     ]);
 

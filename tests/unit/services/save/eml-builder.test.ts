@@ -46,6 +46,33 @@ describe('build_eml', () => {
     expect(text).toContain('file.pdf');
   });
 
+  it('sets Content-ID header on inline attachment with content_id', () => {
+    const attachment = {
+      name: 'logo.png',
+      content_type: 'image/png',
+      content: Buffer.from('png-data'),
+      is_inline: true,
+      content_id: 'image001.png@01DA3B2F.5A7E8990',
+    };
+    const result = build_eml(minimal_message, [attachment]);
+    const text = result.toString('utf-8');
+    expect(text).toContain('Content-ID');
+    expect(text).toContain('image001.png@01DA3B2F.5A7E8990');
+  });
+
+  it('omits Content-ID header when inline attachment has no content_id', () => {
+    const attachment = {
+      name: 'icon.png',
+      content_type: 'image/png',
+      content: Buffer.from('png-data'),
+      is_inline: true,
+    };
+    const result = build_eml(minimal_message, [attachment]);
+    const text = result.toString('utf-8');
+    expect(text).toContain('icon.png');
+    expect(text).not.toContain('Content-ID');
+  });
+
   it('handles message with no to-recipients gracefully', () => {
     const msg = {
       ...minimal_message,
