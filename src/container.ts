@@ -5,6 +5,7 @@ import {
   MANIFEST_REPOSITORY_TOKEN,
   TENANT_CONTEXT_FACTORY_TOKEN,
   RESTORE_CONNECTOR_TOKEN,
+  MAILBOX_DISCOVERY_TOKEN,
 } from '@/ports/tokens/outgoing.tokens';
 import {
   BACKUP_USE_CASE_TOKEN,
@@ -15,6 +16,7 @@ import {
   STORAGE_CHECK_USE_CASE_TOKEN,
   SAVE_USE_CASE_TOKEN,
   STATS_USE_CASE_TOKEN,
+  TENANT_ORCHESTRATOR_TOKEN,
 } from '@/ports/tokens/use-case.tokens';
 import { GraphMailboxConnector } from '@/adapters/m365/graph-mailbox-connector.adapter';
 import { GraphRestoreConnector } from '@/adapters/m365/graph-restore-connector.adapter';
@@ -30,6 +32,8 @@ import { DeletionService } from '@/services/deletion/deletion.service';
 import { StorageCheckService } from '@/services/storage-check/storage-check.service';
 import { SaveService } from '@/services/save/save.service';
 import { StatsService } from '@/services/stats/stats.service';
+import { DefaultTenantBackupOrchestrator } from '@/services/backup/tenant-backup-orchestrator';
+import { GraphMailboxDiscoveryAdapter } from '@/adapters/m365/graph-mailbox-discovery.adapter';
 import type { AtlasConfig } from '@/utils/config';
 import { load_config, ATLAS_CONFIG_TOKEN } from '@/utils/config';
 
@@ -71,6 +75,7 @@ function bind_adapters(container: Container): void {
   container.bind(RESTORE_CONNECTOR_TOKEN).to(GraphRestoreConnector).inSingletonScope();
   container.bind(TENANT_CONTEXT_FACTORY_TOKEN).to(DefaultTenantContextFactory).inSingletonScope();
   container.bind(MANIFEST_REPOSITORY_TOKEN).to(S3ManifestRepository).inSingletonScope();
+  container.bind(MAILBOX_DISCOVERY_TOKEN).to(GraphMailboxDiscoveryAdapter).inSingletonScope();
 }
 
 /** Binds service classes so Inversify can auto-resolve their constructor dependencies. */
@@ -91,4 +96,6 @@ function bind_services(container: Container): void {
   container.bind(SAVE_USE_CASE_TOKEN).toService(SaveService);
   container.bind(StatsService).toSelf();
   container.bind(STATS_USE_CASE_TOKEN).toService(StatsService);
+  container.bind(DefaultTenantBackupOrchestrator).toSelf();
+  container.bind(TENANT_ORCHESTRATOR_TOKEN).toService(DefaultTenantBackupOrchestrator);
 }

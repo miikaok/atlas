@@ -1,12 +1,22 @@
 import type { MailFolder, MessageAttachment } from '@/ports/mailbox/connector.port';
+import type { TenantMailbox } from '@/ports/mailbox/discovery.port';
 import { logger } from '@/utils/logger';
 
 const EXCLUDED_FOLDERS = new Set(['drafts', 'outbox', 'recoverableitemsdeletions', 'junkemail']);
+
+export interface GraphAssignedPlan {
+  service?: string;
+  servicePlanId?: string;
+  capabilityStatus?: string;
+  assignedDateTime?: string;
+}
 
 export interface GraphUserRecord {
   id?: string;
   mail?: string;
   displayName?: string;
+  createdDateTime?: string;
+  assignedPlans?: GraphAssignedPlan[];
 }
 
 export interface GraphFolderRecord {
@@ -42,6 +52,39 @@ export function filter_and_map_folders(folders: GraphFolderRecord[]): MailFolder
       parent_folder_id: f.parentFolderId ?? undefined,
       total_item_count: f.totalItemCount ?? 0,
     }));
+}
+
+/** Extracts Exchange Online license status from a user's assignedPlans. */
+export function extract_exchange_license_status(plans?: GraphAssignedPlan[]): {
+  has_license: boolean;
+  status?: string;
+} {
+  if (!plans || plans.length === 0) return { has_license: false };
+  const exchange_plan = plans.find(
+    (p) => p.service?.toLowerCase() === 'exchange' && p.capabilityStatus,
+  );
+  if (!exchange_plan) return { has_license: false };
+  return {
+    has_license: exchange_plan.capabilityStatus === 'Enabled',
+    status: exchange_plan.capabilityStatus,
+  };
+}
+
+/** Maps Graph user records to TenantMailbox objects with license information. */
+export function map_users_to_tenant_mailboxes(users: GraphUserRecord[]): TenantMailbox[] {
+  return users
+    .filter((u) => u.id && u.mail)
+    .map((u) => {
+      const license = extract_exchange_license_status(u.assignedPlans);
+      return {
+        user_id: u.id!,
+        mail: u.mail!,
+        display_name: u.displayName ?? '',
+        has_exchange_license: license.has_license,
+        exchange_plan_status: license.status,
+        created_at: u.createdDateTime ? new Date(u.createdDateTime) : undefined,
+      };
+    });
 }
 
 /** Filters to fileAttachment, decodes base64 content, warns on missing bytes. */
