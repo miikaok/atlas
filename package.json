@@ -1,6 +1,6 @@
 {
   "name": "m365-atlas",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "An open-source CLI backup engine for Microsoft 365 mailboxes, designed with per-tenant encryption, content-addressed storage, and efficient delta synchronization for scalable, secure backups.",
   "type": "module",
   "main": "./dist/index.mjs",
@@ -77,6 +77,12 @@
   },
   "lint-staged": {
     "**/*.{ts,tsx,js,jsx}": "prettier --write"
+  },
+  "pnpm": {
+    "overrides": {
+      "flatted": "3.4.2",
+      "fast-xml-parser": "5.5.7"
+    }
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1004.0",
