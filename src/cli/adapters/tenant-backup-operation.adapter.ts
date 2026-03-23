@@ -25,7 +25,7 @@ export async function run_tenant_backup_with_cli_adapter(
 ): Promise<TenantBackupResult> {
   const state: TenantInterruptState = { interrupted: false, sigint_count: 0 };
   const concurrency = options.concurrency ?? 4;
-  const dashboard = new TenantBackupDashboard(Math.min(concurrency, 3));
+  const dashboard = new TenantBackupDashboard(concurrency);
 
   const on_sigint = (): void => {
     state.sigint_count++;
@@ -34,6 +34,8 @@ export async function run_tenant_backup_with_cli_adapter(
       dashboard.set_status(
         '[!] Stopping -- finishing active mailboxes (Ctrl+C again to force quit)',
       );
+    } else {
+      process.exit(1);
     }
   };
 

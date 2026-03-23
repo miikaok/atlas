@@ -1,7 +1,7 @@
 /**
  * Compact, fixed-height tenant-level backup dashboard.
- * Shows 1-3 active mailbox rows, overall progress header, and summary footer.
- * Stays at 5-6 lines regardless of tenant size (100+ mailboxes).
+ * Shows one row per concurrent worker, overall progress header, and summary footer.
+ * Height is fixed at (concurrency + 5) lines regardless of tenant size.
  */
 
 import chalk from 'chalk';
@@ -28,6 +28,9 @@ interface Totals {
   eta_seconds: number;
 }
 
+/** ~24 fps cap: 1000ms / 24 frames ≈ 42ms per frame. */
+const FRAME_INTERVAL_MS = 42;
+
 export class TenantBackupDashboard implements TenantProgressReporter {
   private readonly _max_slots: number;
   private readonly _slots: (MailboxSlot | undefined)[];
@@ -35,6 +38,9 @@ export class TenantBackupDashboard implements TenantProgressReporter {
   private readonly _is_tty: boolean;
   private _rendered = false;
   private _status_message = '';
+  private _last_render_ms = 0;
+  private _render_timer: ReturnType<typeof setTimeout> | undefined;
+  private _dirty = false;
 
   constructor(max_slots = 3) {
     this._max_slots = max_slots;
@@ -46,7 +52,7 @@ export class TenantBackupDashboard implements TenantProgressReporter {
   set_mailbox_count(total: number): void {
     this._totals.mailbox_count = total;
     this._totals.pending = total;
-    this.renderDashboard();
+    this.scheduleRender();
   }
 
   mark_mailbox_active(slot: number, mailbox_id: string): void {
@@ -61,7 +67,7 @@ export class TenantBackupDashboard implements TenantProgressReporter {
       deduped: 0,
       error_message: '',
     };
-    this.renderDashboard();
+    this.scheduleRender();
   }
 
   update_mailbox_progress(slot: number, folder_name: string, pct: number, rate: number): void {
@@ -70,7 +76,7 @@ export class TenantBackupDashboard implements TenantProgressReporter {
     if (folder_name) s.folder_name = folder_name;
     s.pct = pct;
     s.rate = rate;
-    this.renderDashboard();
+    this.scheduleRender();
   }
 
   mark_mailbox_done(slot: number, mailbox_id: string, stored: number, deduped: number): void {
@@ -84,7 +90,7 @@ export class TenantBackupDashboard implements TenantProgressReporter {
       s.deduped = deduped;
     }
     this._slots[slot] = undefined;
-    this.renderDashboard();
+    this.scheduleRender();
   }
 
   mark_mailbox_error(slot: number, mailbox_id: string, message: string): void {
@@ -97,7 +103,7 @@ export class TenantBackupDashboard implements TenantProgressReporter {
       s.error_message = message;
     }
     this._slots[slot] = undefined;
-    this.renderDashboard();
+    this.scheduleRender();
   }
 
   update_totals(
@@ -112,16 +118,20 @@ export class TenantBackupDashboard implements TenantProgressReporter {
     this._totals.pending = pending;
     this._totals.rate = rate;
     this._totals.eta_seconds = eta_seconds;
-    this.renderDashboard();
+    this.scheduleRender();
   }
 
   set_status(message: string): void {
     this._status_message = message;
-    this.renderDashboard();
+    this.scheduleRender();
   }
 
   finish(): void {
-    this.renderDashboard();
+    if (this._render_timer) {
+      clearTimeout(this._render_timer);
+      this._render_timer = undefined;
+    }
+    this.flushFrame();
   }
 
   /** Fixed line count: header + separator + slots + separator + summary + status = max_slots + 5. */
@@ -129,8 +139,33 @@ export class TenantBackupDashboard implements TenantProgressReporter {
     return this._max_slots + 5;
   }
 
-  private renderDashboard(): void {
+  /** Throttles render calls to ~24 fps. Renders immediately if enough time has passed. */
+  private scheduleRender(): void {
+    this._dirty = true;
+    const now = Date.now();
+    const elapsed = now - this._last_render_ms;
+
+    if (elapsed >= FRAME_INTERVAL_MS) {
+      if (this._render_timer) {
+        clearTimeout(this._render_timer);
+        this._render_timer = undefined;
+      }
+      this.flushFrame();
+      return;
+    }
+
+    if (!this._render_timer) {
+      this._render_timer = setTimeout(() => {
+        this._render_timer = undefined;
+        if (this._dirty) this.flushFrame();
+      }, FRAME_INTERVAL_MS - elapsed);
+    }
+  }
+
+  private flushFrame(): void {
     if (!this._is_tty) return;
+    this._dirty = false;
+    this._last_render_ms = Date.now();
 
     const lines: string[] = [];
     const t = this._totals;
@@ -171,13 +206,15 @@ export class TenantBackupDashboard implements TenantProgressReporter {
     const status = this._status_message ? chalk.yellow(this._status_message) : '';
     lines.push(status);
 
+    let frame = '\x1b[?25l';
     if (this._rendered) {
-      process.stdout.write(`\x1b[${this.fixedHeight}A`);
+      frame += `\x1b[${this.fixedHeight}A`;
     }
-
     for (const line of lines) {
-      process.stdout.write(`\r  ${line}\x1b[K\n`);
+      frame += `\r  ${line}\x1b[K\n`;
     }
+    frame += '\x1b[?25h';
+    process.stdout.write(frame);
 
     this._rendered = true;
   }

@@ -66,7 +66,7 @@ async function process_message(
   }
 }
 
-/** Drains pending attachment fetches in parallel batches of `concurrency`. */
+/** Drains all pending attachment fetches in parallel batches of `concurrency`. */
 async function flush_pending_attachments(
   ctx: TenantContext,
   connector: MailboxConnector,
@@ -78,26 +78,26 @@ async function flush_pending_attachments(
   object_lock_policy?: ObjectLockPolicy,
   concurrency = DEFAULT_ATTACHMENT_CONCURRENCY,
 ): Promise<void> {
-  if (pending.length === 0) return;
+  while (pending.length > 0) {
+    const batch = pending.splice(0, concurrency);
+    const tasks = batch.map(async (p) => {
+      const att = await fetch_and_store_attachments(
+        ctx,
+        connector,
+        tenant_id,
+        mailbox_id,
+        p.message_id,
+        undefined,
+        object_lock_policy,
+      );
+      if (att && att.length > 0) {
+        stats.att_stored += att.length;
+        entries[p.entry_index] = { ...entries[p.entry_index]!, attachments: att };
+      }
+    });
 
-  const batch = pending.splice(0, concurrency);
-  const tasks = batch.map(async (p) => {
-    const att = await fetch_and_store_attachments(
-      ctx,
-      connector,
-      tenant_id,
-      mailbox_id,
-      p.message_id,
-      undefined,
-      object_lock_policy,
-    );
-    if (att && att.length > 0) {
-      stats.att_stored += att.length;
-      entries[p.entry_index] = { ...entries[p.entry_index]!, attachments: att };
-    }
-  });
-
-  await Promise.all(tasks);
+    await Promise.all(tasks);
+  }
 }
 
 /** Runs a delta sync for one folder, processing messages inline as pages arrive. */
@@ -193,7 +193,7 @@ export async function sync_single_folder(params: FolderSyncParams): Promise<Fold
   if (
     !is_interrupted() &&
     prev_delta_link &&
-    delta.messages.length === 0 &&
+    folder_processed === 0 &&
     folder_total > 0 &&
     previous_manifest_entries === 0
   ) {

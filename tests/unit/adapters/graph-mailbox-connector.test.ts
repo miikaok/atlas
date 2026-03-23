@@ -249,6 +249,44 @@ describe('GraphMailboxConnector', () => {
       expect(mock_client._chain.get).toHaveBeenCalledTimes(2);
     });
 
+    it('does not accumulate messages when on_page callback is provided (streaming mode)', async () => {
+      mock_client._chain.get
+        .mockResolvedValueOnce({
+          value: [
+            { id: 'msg-1', subject: 'Page 1', receivedDateTime: '2025-01-15T10:00:00Z' },
+            { id: 'msg-2', subject: 'Page 1b', receivedDateTime: '2025-01-15T10:01:00Z' },
+          ],
+          '@odata.nextLink': '/delta?skiptoken=page2',
+        })
+        .mockResolvedValueOnce({
+          value: [{ id: 'msg-3', subject: 'Page 2', receivedDateTime: '2025-01-15T10:02:00Z' }],
+          '@odata.deltaLink': 'https://graph.microsoft.com/delta?token=final',
+        });
+
+      const streamed_pages: { page: number; count: number; msgs: string[] }[] = [];
+      const on_page = (page_num: number, items_so_far: number, page_msgs: unknown[]) => {
+        streamed_pages.push({
+          page: page_num,
+          count: items_so_far,
+          msgs: page_msgs.map((m) => (m as { message_id: string }).message_id),
+        });
+      };
+
+      const result = await connector.fetch_delta(
+        'tenant-1',
+        'user-1',
+        'f-inbox',
+        undefined,
+        on_page,
+      );
+
+      expect(result.messages).toHaveLength(0);
+      expect(result.delta_link).toBe('https://graph.microsoft.com/delta?token=final');
+      expect(streamed_pages).toHaveLength(2);
+      expect(streamed_pages[0]).toEqual({ page: 1, count: 2, msgs: ['msg-1', 'msg-2'] });
+      expect(streamed_pages[1]).toEqual({ page: 2, count: 3, msgs: ['msg-3'] });
+    });
+
     it('falls back to full enumeration on invalid delta token', async () => {
       const stale_link = 'https://graph.microsoft.com/delta?token=stale';
 
