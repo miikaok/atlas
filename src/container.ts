@@ -16,6 +16,7 @@ import {
   STORAGE_CHECK_USE_CASE_TOKEN,
   SAVE_USE_CASE_TOKEN,
   STATS_USE_CASE_TOKEN,
+  STATUS_USE_CASE_TOKEN,
   TENANT_ORCHESTRATOR_TOKEN,
 } from '@/ports/tokens/use-case.tokens';
 import { GraphMailboxConnector } from '@/adapters/m365/graph-mailbox-connector.adapter';
@@ -33,6 +34,7 @@ import { StorageCheckService } from '@/services/storage-check/storage-check.serv
 import { SaveService } from '@/services/save/save.service';
 import { StatsService } from '@/services/stats/stats.service';
 import { DefaultTenantBackupOrchestrator } from '@/services/backup/tenant-backup-orchestrator';
+import { MailboxStatusService } from '@/services/status/mailbox-status.service';
 import { GraphMailboxDiscoveryAdapter } from '@/adapters/m365/graph-mailbox-discovery.adapter';
 import type { AtlasConfig } from '@/utils/config';
 import { load_config, ATLAS_CONFIG_TOKEN } from '@/utils/config';
@@ -96,6 +98,8 @@ function bind_services(container: Container): void {
   container.bind(SAVE_USE_CASE_TOKEN).toService(SaveService);
   container.bind(StatsService).toSelf();
   container.bind(STATS_USE_CASE_TOKEN).toService(StatsService);
+  container.bind(MailboxStatusService).toSelf();
+  container.bind(STATUS_USE_CASE_TOKEN).toService(MailboxStatusService);
   container.bind(DefaultTenantBackupOrchestrator).toSelf();
   container.bind(TENANT_ORCHESTRATOR_TOKEN).toService(DefaultTenantBackupOrchestrator);
 }

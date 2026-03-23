@@ -7,6 +7,7 @@ import type { Manifest } from '@/domain/manifest';
 import type { DeletionResult } from '@/ports/deletion/use-case.port';
 import type { StorageCheckRequest, StorageCheckResult } from '@/ports/storage-check/use-case.port';
 import type { BucketStats, MailboxStats } from '@/domain/stats';
+import type { MailboxStatusResult } from '@/ports/status/use-case.port';
 
 export interface AtlasInstanceConfig {
   readonly tenantId: string;
@@ -35,4 +36,5 @@ export interface AtlasInstance {
   checkStorage(request?: StorageCheckRequest): Promise<StorageCheckResult>;
   getBucketStats(): Promise<BucketStats>;
   getMailboxStats(mailboxId: string): Promise<MailboxStats>;
+  checkMailboxStatus(mailboxId: string): Promise<MailboxStatusResult>;
 }

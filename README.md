@@ -25,7 +25,9 @@ An open-source CLI backup and restore engine for Microsoft 365 mailboxes. Built 
 
 📨 **EML export** — Save backed-up emails as standard `.eml` files in compressed zip archives with Outlook-compatible folder structure and SHA-256 verification.
 
-📊 **Live progress dashboard** — ANSI dashboard shows all folders in real time with ETA, speed, and per-folder status.
+📊 **Live progress dashboard** — ANSI dashboard shows all folders in real time with ETA, speed, and per-folder status. Tenant-wide backups show concurrent worker progress.
+
+🔍 **Delta-based status check** — Peek at Graph delta state to report whether a mailbox backup is current, without running a backup.
 
 🧩 **Typed SDK** — Programmatic API for embedding in other Node.js applications via `m365-atlas/sdk`.
 
@@ -57,7 +59,7 @@ src/
 │   ├── storage-s3/        # S3 object storage, manifest repo, bucket manager
 │   └── tenant-context.factory.ts
 ├── cli/
-│   └── commands/          # backup, list, read, verify, restore, save, delete
+│   └── commands/          # backup, list, read, verify, restore, save, delete, status, mailboxes
 ├── domain/                # Manifest, Snapshot, Tenant, BackupObject (pure data)
 ├── ports/                 # ObjectStorage, MailboxConnector, RestoreConnector, ManifestRepository, KeyService
 ├── services/              # MailboxSyncService, RestoreService, SaveService, CatalogService, helpers
@@ -77,8 +79,17 @@ cd docker && docker compose up -d
 cp .env.example .env
 # fill in tenant_id, client_id, client_secret, s3 credentials, encryption passphrase
 
-# first backup
+# first backup (single mailbox)
 atlas backup --mailbox user@company.com
+
+# full tenant backup (all licensed mailboxes in parallel)
+atlas backup
+
+# check if a mailbox is up to date (fast, no backup runs)
+atlas status -m user@company.com
+
+# list tenant mailboxes from Graph
+atlas mailboxes
 
 # list what was backed up
 atlas list
@@ -267,9 +278,12 @@ Tests use Vitest with `@vitest/coverage-v8`. Services are tested via Inversify c
 - [x] **Outlook mailbox backup** with delta sync, content-addressed deduplication, and attachment handling
 - [x] **Outlook mailbox restore** with original timestamps, folder structure, cross-mailbox support, and chunked attachment upload
 - [x] **EML export (save)** -- save backed-up emails as `.eml` files in compressed zip archives with Outlook folder structure, SHA-256 verification, and attachment embedding
-- [x] **CLI interface** -- backup, restore, save, verify, list, read, delete, and storage-check commands
+- [x] **CLI interface** -- backup, restore, save, verify, list, read, delete, status, mailboxes, and storage-check commands
 - [x] **S3 Object Lock / retention policies** -- GOVERNANCE and COMPLIANCE mode with storage-enforced immutability
 - [x] **Typed programmatic SDK** -- `m365-atlas/sdk` subpath with camelCase ES6 API including save operations
+- [x] **Tenant-wide backup orchestration** -- parallel backup of all Exchange-licensed mailboxes with rate-aware concurrency and live dashboard
+- [x] **Mailbox discovery** -- enumerate tenant mailboxes from Graph with license status, creation date, and size
+- [x] **Delta-based status check** -- peek at Graph delta state to determine mailbox backup freshness without running a backup
 - [x] **Repository docs** -- contributing guide, issue/PR templates, code conventions
 
 ### Up next
