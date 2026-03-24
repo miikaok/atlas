@@ -6,6 +6,7 @@ import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
 import type { CatalogUseCase } from '@/ports/catalog/use-case.port';
 import { CATALOG_USE_CASE_TOKEN } from '@/ports/tokens/use-case.tokens';
 import type { AttachmentEntry } from '@/domain/manifest';
+import { html_to_text } from '@/utils/html-to-text';
 import { logger } from '@/utils/logger';
 
 type ContainerFactory = () => Container;
@@ -113,26 +114,10 @@ function extract_body_preview(body: unknown): string {
   if (!content) return '(empty body)';
 
   if (safe_string(obj['contentType']).toLowerCase() === 'html') {
-    return strip_html(content);
+    return html_to_text(content);
   }
 
   return content;
-}
-
-/** Removes HTML tags and decodes common entities for display. */
-function strip_html(html: string): string {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 }
 
 /** Formats a Graph API { emailAddress: { name, address } } object. */
