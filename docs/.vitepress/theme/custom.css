@@ -203,3 +203,15 @@
 .dark .vp-doc .header-anchor:hover {
   color: #a5b4fc;
 }
+
+:root {
+  --vp-layout-max-width: 1440px;
+}
+
+.VPDoc.has-aside .content-container {
+  max-width: 820px;
+}
+
+.VPDoc:not(.has-aside) .content-container {
+  max-width: 920px;
+}
