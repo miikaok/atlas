@@ -14,6 +14,7 @@ import { register_save_command } from '@/cli/commands/save.command';
 import { register_stats_command } from '@/cli/commands/stats.command';
 import { register_mailboxes_command } from '@/cli/commands/mailboxes.command';
 import { register_status_command } from '@/cli/commands/status.command';
+import { register_onedrive_commands } from '@/cli/commands/onedrive.command';
 import { logger } from '@/utils/logger';
 import type { Container } from 'inversify';
 
@@ -48,6 +49,7 @@ function register_commands(program: Command): void {
   register_stats_command(program, get_container);
   register_mailboxes_command(program, get_container);
   register_status_command(program, get_container);
+  register_onedrive_commands(program, get_container);
 }
 
 /** Handles top-level unhandled errors from command execution. */

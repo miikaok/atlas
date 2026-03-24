@@ -21,6 +21,14 @@ This precedence means you can set defaults in a config file, override specific v
 | `ATLAS_S3_REGION`             | `s3_region`             | no       | S3 region (default: `us-east-1`)               |
 | `ATLAS_ENCRYPTION_PASSPHRASE` | `encryption_passphrase` | yes      | Master passphrase for envelope encryption      |
 
+## OneDrive Workload Notes
+
+OneDrive backup uses the same Atlas configuration fields as mailbox backup. There are **no additional storage or encryption variables** for OneDrive in Option A.
+
+- Owner scope is passed at runtime via CLI (`atlas onedrive ... --owner`) or SDK (`backupOneDrive(ownerId, ...)`).
+- Data is written under `onedrive/` prefixes inside the same tenant bucket.
+- The same Azure AD app credentials are reused. For OneDrive commands, the app must have Microsoft Graph **Application** permissions `Files.Read.All` and `Sites.Read.All` (with admin consent).
+
 ## Config File Example
 
 ```json

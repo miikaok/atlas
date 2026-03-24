@@ -10,6 +10,11 @@ import type { StorageCheckUseCase } from '@/ports/storage-check/use-case.port';
 import type { SaveUseCase } from '@/ports/save/use-case.port';
 import type { StatsUseCase } from '@/ports/stats/use-case.port';
 import type { StatusUseCase } from '@/ports/status/use-case.port';
+import type {
+  OneDriveBackupUseCase,
+  OneDriveCatalogUseCase,
+  OneDriveVerificationUseCase,
+} from '@/ports/onedrive/use-case.port';
 import {
   BACKUP_USE_CASE_TOKEN,
   VERIFICATION_USE_CASE_TOKEN,
@@ -20,6 +25,9 @@ import {
   SAVE_USE_CASE_TOKEN,
   STATS_USE_CASE_TOKEN,
   STATUS_USE_CASE_TOKEN,
+  ONEDRIVE_BACKUP_USE_CASE_TOKEN,
+  ONEDRIVE_CATALOG_USE_CASE_TOKEN,
+  ONEDRIVE_VERIFICATION_USE_CASE_TOKEN,
 } from '@/ports/tokens/use-case.tokens';
 
 /** Creates a tenant-bound Atlas SDK instance from explicit configuration values. */
@@ -36,6 +44,15 @@ export function createAtlasInstance(config: AtlasInstanceConfig): AtlasInstance 
   const saveUseCase = container.get<SaveUseCase>(SAVE_USE_CASE_TOKEN);
   const statsUseCase = container.get<StatsUseCase>(STATS_USE_CASE_TOKEN);
   const statusUseCase = container.get<StatusUseCase>(STATUS_USE_CASE_TOKEN);
+  const oneDriveBackupUseCase = container.get<OneDriveBackupUseCase>(
+    ONEDRIVE_BACKUP_USE_CASE_TOKEN,
+  );
+  const oneDriveCatalogUseCase = container.get<OneDriveCatalogUseCase>(
+    ONEDRIVE_CATALOG_USE_CASE_TOKEN,
+  );
+  const oneDriveVerificationUseCase = container.get<OneDriveVerificationUseCase>(
+    ONEDRIVE_VERIFICATION_USE_CASE_TOKEN,
+  );
 
   return {
     async backupMailbox(mailboxId, options) {
@@ -85,6 +102,18 @@ export function createAtlasInstance(config: AtlasInstanceConfig): AtlasInstance 
     },
     async checkMailboxStatus(mailboxId) {
       return await statusUseCase.check_mailbox_status(tenantId, mailboxId);
+    },
+    async backupOneDrive(ownerId, options) {
+      return await oneDriveBackupUseCase.backup_onedrive(tenantId, ownerId, options);
+    },
+    async listOneDriveSnapshots(ownerId) {
+      return await oneDriveCatalogUseCase.list_onedrive_snapshots(tenantId, ownerId);
+    },
+    async listOneDriveFileVersions(ownerId, fileRef) {
+      return await oneDriveCatalogUseCase.list_onedrive_file_versions(tenantId, ownerId, fileRef);
+    },
+    async verifyOneDriveSnapshot(snapshotId) {
+      return await oneDriveVerificationUseCase.verify_onedrive_snapshot(tenantId, snapshotId);
     },
   };
 }

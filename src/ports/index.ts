@@ -8,6 +8,9 @@ export type {
 } from './mailbox/connector.port';
 
 export type { ManifestRepository } from './storage/manifest-repository.port';
+export type { OneDriveManifestRepository } from './onedrive/manifest-repository.port';
+export type { OneDriveFileVersionIndexRepository } from './onedrive/file-version-index-repository.port';
+export type { OneDriveDeltaCursorRepository } from './onedrive/delta-cursor-repository.port';
 
 export type { KeyService } from './crypto/key-service.port';
 
@@ -19,6 +22,11 @@ export type {
 } from './tenant/context.port';
 
 export type { RestoreConnector, AttachmentUpload, UploadSession } from './restore/connector.port';
+export type {
+  OneDriveConnector,
+  OneDriveDeltaItem,
+  OneDriveDeltaResult,
+} from './onedrive/connector.port';
 
 export type {
   BackupUseCase,
@@ -44,6 +52,14 @@ export type {
 } from './storage-check/use-case.port';
 
 export type { StatsUseCase } from './stats/use-case.port';
+export type {
+  OneDriveBackupUseCase,
+  OneDriveCatalogUseCase,
+  OneDriveVerificationUseCase,
+  OneDriveBackupResult,
+  OneDriveBackupOptions,
+  OneDriveVerificationResult,
+} from './onedrive/use-case.port';
 
 export {
   OBJECT_STORAGE_TOKEN,
@@ -52,6 +68,10 @@ export {
   KEY_SERVICE_TOKEN,
   TENANT_CONTEXT_FACTORY_TOKEN,
   RESTORE_CONNECTOR_TOKEN,
+  ONEDRIVE_CONNECTOR_TOKEN,
+  ONEDRIVE_MANIFEST_REPOSITORY_TOKEN,
+  ONEDRIVE_FILE_INDEX_REPOSITORY_TOKEN,
+  ONEDRIVE_DELTA_CURSOR_REPOSITORY_TOKEN,
 } from './tokens/outgoing.tokens';
 
 export {
@@ -62,4 +82,7 @@ export {
   DELETION_USE_CASE_TOKEN,
   STORAGE_CHECK_USE_CASE_TOKEN,
   STATS_USE_CASE_TOKEN,
+  ONEDRIVE_BACKUP_USE_CASE_TOKEN,
+  ONEDRIVE_CATALOG_USE_CASE_TOKEN,
+  ONEDRIVE_VERIFICATION_USE_CASE_TOKEN,
 } from './tokens/use-case.tokens';

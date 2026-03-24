@@ -11,6 +11,14 @@ export type {
   ManifestObjectLockRequestedPolicy,
   ManifestObjectLockEffectivePolicy,
 } from './manifest';
+export type {
+  OneDriveSnapshotManifest,
+  OneDriveManifestEntry,
+  OneDriveFileVersionIndex,
+  OneDriveFileVersionRecord,
+  OneDriveDeltaCursor,
+  OneDriveChangeType,
+} from './onedrive-manifest';
 export type { RestoreRequest } from './restore-request';
 export { RestoreStatus } from './restore-request';
 export type { BucketStats, MailboxStats, FolderStats, MonthlyBreakdown } from './stats';

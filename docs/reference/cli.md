@@ -119,6 +119,65 @@ atlas storage-check --lock-mode compliance --retention-days 365
 | `--retention-days <n>` | Planned retention period in days                        |
 | `-t, --tenant <id>`    | Override tenant ID                                      |
 
+## `atlas onedrive backup`
+
+Back up changed OneDrive files for one owner into the tenant bucket under `onedrive/` prefixes. This command persists delta cursor metadata on every run, but creates a snapshot only when file data or file state changed.
+
+Required Microsoft Graph **Application** permissions: `Files.Read.All`, `Sites.Read.All` (admin consent required).
+
+```bash
+atlas onedrive backup -o user@company.com
+atlas onedrive backup -o user@company.com --full
+atlas onedrive backup -o user@company.com -t <tenant-id>
+```
+
+| Option              | Description                                                   |
+| ------------------- | ------------------------------------------------------------- |
+| `-o, --owner <id>`  | OneDrive owner identifier (user principal/email)              |
+| `--full`            | Ignore saved OneDrive delta cursor and force full enumeration |
+| `-t, --tenant <id>` | Override tenant ID from config                                |
+
+## `atlas onedrive list-snapshots`
+
+List OneDrive snapshots for one owner.
+
+```bash
+atlas onedrive list-snapshots -o user@company.com
+```
+
+| Option              | Description                    |
+| ------------------- | ------------------------------ |
+| `-o, --owner <id>`  | OneDrive owner identifier      |
+| `-t, --tenant <id>` | Override tenant ID from config |
+
+## `atlas onedrive list-versions`
+
+List all backed-up versions for a single OneDrive file, including snapshot IDs and backup timestamps.
+
+```bash
+atlas onedrive list-versions -o user@company.com -f <file-id>
+atlas onedrive list-versions -o user@company.com -f /Documents/Finance/report.xlsx
+```
+
+| Option              | Description                    |
+| ------------------- | ------------------------------ |
+| `-o, --owner <id>`  | OneDrive owner identifier      |
+| `-f, --file <ref>`  | File identifier or full path   |
+| `-t, --tenant <id>` | Override tenant ID from config |
+
+## `atlas onedrive verify`
+
+Verify integrity of a OneDrive snapshot. For each non-deleted entry, Atlas decrypts the stored blob, recomputes SHA-256, compares checksums, and validates that the file version index includes the snapshot reference.
+
+```bash
+atlas onedrive verify -s <snapshot-id>
+```
+
+| Option                | Description                    |
+| --------------------- | ------------------------------ |
+| `-s, --snapshot <id>` | OneDrive snapshot identifier   |
+| `-t, --tenant <id>`   | Override tenant ID from config |
+
 ## `atlas list`
 
 Browse backed-up data at three zoom levels. Subjects are hidden by default for data protection.

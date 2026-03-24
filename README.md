@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 [![Socket Badge](https://badge.socket.dev/npm/package/m365-atlas)](https://socket.dev/npm/package/m365-atlas)
 
-An open-source CLI backup and restore engine for Microsoft 365 mailboxes. Built with per-tenant envelope encryption, content-addressed deduplication, multi-layer integrity validation, and efficient delta synchronization for scalable, secure operations against S3-compatible object storage.
+An open-source CLI backup and restore engine for Microsoft 365 mailboxes and OneDrive files. Built with per-tenant envelope encryption, content-addressed deduplication, multi-layer integrity validation, and efficient delta synchronization for scalable, secure operations against S3-compatible object storage.
 
 ## Highlights
 
@@ -16,6 +16,7 @@ An open-source CLI backup and restore engine for Microsoft 365 mailboxes. Built 
 - **Content-addressed deduplication** — messages and attachments stored once by SHA-256 hash
 - **Storage-level immutability** — S3/MinIO Object Lock with time-based retention
 - **Delta sync** — incremental backups via Microsoft Graph delta queries
+- **OneDrive snapshots** — changed-file snapshots with per-file version timelines
 - **EML export** — save emails as `.eml` zip archives with Outlook folder structure
 - **Typed SDK** — embed in Node.js apps via `m365-atlas/sdk`
 - **Live dashboard** — real-time ANSI progress for single and tenant-wide backups
@@ -27,6 +28,8 @@ npm install -g m365-atlas
 
 atlas backup --mailbox user@company.com   # single mailbox
 atlas backup                              # all tenant mailboxes
+atlas onedrive backup --owner user@company.com
+atlas onedrive list-versions --owner user@company.com --file /Documents/report.xlsx
 atlas status -m user@company.com          # check freshness
 atlas restore -m user@company.com -f Inbox
 atlas save -m user@company.com -o backup.zip

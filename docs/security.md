@@ -31,13 +31,13 @@ The KEK is derived using **scrypt**, a memory-hard key derivation function desig
 
 Parameters used by Atlas:
 
-| Parameter | Value | Purpose |
-| --- | --- | --- |
-| N (cost) | 16384 | CPU/memory cost factor (2^14 iterations) |
-| r (block size) | 8 | Memory usage multiplier |
-| p (parallelism) | 1 | Sequential derivation (no parallel lanes) |
-| Salt | `tenant_id` string | Ensures different KEKs per tenant |
-| Output | 32 bytes (256 bits) | AES-256 key length |
+| Parameter       | Value               | Purpose                                   |
+| --------------- | ------------------- | ----------------------------------------- |
+| N (cost)        | 16384               | CPU/memory cost factor (2^14 iterations)  |
+| r (block size)  | 8                   | Memory usage multiplier                   |
+| p (parallelism) | 1                   | Sequential derivation (no parallel lanes) |
+| Salt            | `tenant_id` string  | Ensures different KEKs per tenant         |
+| Output          | 32 bytes (256 bits) | AES-256 key length                        |
 
 The **tenant ID as salt** is a deliberate design choice. It means that the same master passphrase used across multiple tenants produces completely different KEKs for each tenant. An attacker who compromises one tenant's KEK gains nothing toward decrypting another tenant's data.
 
@@ -73,13 +73,17 @@ Every encrypt operation generates a **fresh random 12-byte IV** (initialization 
 
 ### What Is Encrypted at Rest
 
-| Data | Encrypted | Notes |
-| --- | --- | --- |
-| Email message bodies | Yes | Stored as encrypted JSON under `data/{mailbox}/{sha256}` |
-| Attachments | Yes | Stored as encrypted blobs under `attachments/{mailbox}/{sha256}` |
-| Manifests | Yes | Contains subjects, folder names, delta URLs, checksums |
-| Wrapped DEK | Yes | `_meta/dek.enc` is encrypted with the KEK |
-| S3 object metadata | **No** | `x-message-id` and `x-plaintext-sha256` headers are visible to anyone with S3 read access |
+| Data                     | Encrypted | Notes                                                                                     |
+| ------------------------ | --------- | ----------------------------------------------------------------------------------------- |
+| Email message bodies     | Yes       | Stored as encrypted JSON under `data/{mailbox}/{sha256}`                                  |
+| Attachments              | Yes       | Stored as encrypted blobs under `attachments/{mailbox}/{sha256}`                          |
+| OneDrive files           | Yes       | Stored as encrypted blobs under `onedrive/data/{owner}/{sha256}`                          |
+| OneDrive manifests       | Yes       | Stored under `onedrive/manifests/{owner}/{snapshot}.json`                                 |
+| OneDrive version indexes | Yes       | Stored under `onedrive/index/{owner}/files/{file_id}.json`                                |
+| OneDrive delta cursors   | Yes       | Stored under `onedrive/_meta/{owner}/delta.json`                                          |
+| Manifests                | Yes       | Contains subjects, folder names, delta URLs, checksums                                    |
+| Wrapped DEK              | Yes       | `_meta/dek.enc` is encrypted with the KEK                                                 |
+| S3 object metadata       | **No**    | `x-message-id` and `x-plaintext-sha256` headers are visible to anyone with S3 read access |
 
 The S3 object metadata is intentionally not encrypted because it is used for deduplication checks without requiring decryption. However, this means that the **Graph message ID** and **plaintext SHA-256 hash** of each message are visible to anyone who can list or read S3 object metadata. The message content itself remains encrypted.
 
@@ -89,11 +93,11 @@ Manifests deserve special attention: they contain email subjects, folder display
 
 Atlas validates data integrity at three independent layers. Each layer catches a different class of failure:
 
-| Layer | Mechanism | What It Catches | When |
-| --- | --- | --- | --- |
-| **Plaintext** | SHA-256 checksum stored in manifest | Corruption before encryption, application bugs | Backup, verify, save |
-| **Transport** | `Content-MD5` header on S3 PUT | Network corruption during upload (bit flips, truncation) | Every upload (S3 rejects mismatches) |
-| **At-rest** | AES-256-GCM authentication tag | Storage-level tampering or corruption | Every decrypt operation |
+| Layer         | Mechanism                           | What It Catches                                          | When                                 |
+| ------------- | ----------------------------------- | -------------------------------------------------------- | ------------------------------------ |
+| **Plaintext** | SHA-256 checksum stored in manifest | Corruption before encryption, application bugs           | Backup, verify, save                 |
+| **Transport** | `Content-MD5` header on S3 PUT      | Network corruption during upload (bit flips, truncation) | Every upload (S3 rejects mismatches) |
+| **At-rest**   | AES-256-GCM authentication tag      | Storage-level tampering or corruption                    | Every decrypt operation              |
 
 ### How Verification Works
 
@@ -104,7 +108,7 @@ When you run `atlas verify`, Atlas performs a full integrity check for a snapsho
 3. Computes SHA-256 of the decrypted plaintext.
 4. Compares against the checksum stored in the manifest using **constant-time comparison** (`timingSafeEqual`) to prevent timing attacks.
 
-Currently, `atlas verify` checks **message body entries** listed in the manifest. Attachments are implicitly protected by GCM authentication during any decrypt operation (backup, restore, save).
+`atlas verify` checks **message body entries** listed in mailbox manifests. `atlas onedrive verify` checks OneDrive snapshot entries and validates per-file version index linkage. Attachments and other encrypted blobs are implicitly protected by GCM authentication during any decrypt operation (backup, restore, save).
 
 ### Content-MD5 on Uploads
 

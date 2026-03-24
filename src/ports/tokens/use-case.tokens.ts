@@ -8,3 +8,6 @@ export const SAVE_USE_CASE_TOKEN = Symbol.for('SaveUseCase');
 export const STATS_USE_CASE_TOKEN = Symbol.for('StatsUseCase');
 export const STATUS_USE_CASE_TOKEN = Symbol.for('StatusUseCase');
 export const TENANT_ORCHESTRATOR_TOKEN = Symbol.for('TenantBackupOrchestrator');
+export const ONEDRIVE_BACKUP_USE_CASE_TOKEN = Symbol.for('OneDriveBackupUseCase');
+export const ONEDRIVE_CATALOG_USE_CASE_TOKEN = Symbol.for('OneDriveCatalogUseCase');
+export const ONEDRIVE_VERIFICATION_USE_CASE_TOKEN = Symbol.for('OneDriveVerificationUseCase');

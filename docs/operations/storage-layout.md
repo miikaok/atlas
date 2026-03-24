@@ -14,10 +14,25 @@ atlas-{tenant_id}/
 │   └── {mailbox_id}/
 │       ├── {sha256_x}                  # encrypted attachment (content-addressed)
 │       └── ...
-└── manifests/
-    └── {mailbox_id}/
-        ├── {snapshot_id_1}.json        # encrypted manifest
-        └── {snapshot_id_2}.json
+├── manifests/
+│   └── {mailbox_id}/
+│       ├── {snapshot_id_1}.json        # encrypted manifest
+│       └── {snapshot_id_2}.json
+└── onedrive/
+    ├── data/
+    │   └── {owner_id}/
+    │       ├── {sha256_a}              # encrypted file blob (content-addressed)
+    │       └── ...
+    ├── manifests/
+    │   └── {owner_id}/
+    │       ├── {snapshot_id_1}.json    # encrypted OneDrive snapshot manifest
+    │       └── {snapshot_id_2}.json
+    ├── index/
+    │   └── {owner_id}/files/
+    │       ├── {file_id_1}.json        # encrypted per-file version timeline
+    │       └── ...
+    └── _meta/
+        └── {owner_id}/delta.json       # encrypted OneDrive delta cursor/checkpoint
 ```
 
 ## Per-Tenant Bucket Isolation
@@ -28,12 +43,16 @@ For managed service providers backing up multiple tenants, this isolation means 
 
 ## Key Paths
 
-| Prefix | Contents | Security Notes |
-| --- | --- | --- |
-| `_meta/dek.enc` | Wrapped data encryption key (one per tenant) | **Most critical object** -- losing this means losing access to all tenant data |
-| `data/{mailbox}/` | Encrypted email messages, addressed by SHA-256 | Content is encrypted; S3 metadata is not |
-| `attachments/{mailbox}/` | Encrypted attachments, addressed by SHA-256 | Content is encrypted; S3 metadata is not |
-| `manifests/{mailbox}/` | Encrypted snapshot manifests (JSON) | Contains subjects, folder names, delta URLs -- all encrypted |
+| Prefix                              | Contents                                       | Security Notes                                                                 |
+| ----------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| `_meta/dek.enc`                     | Wrapped data encryption key (one per tenant)   | **Most critical object** -- losing this means losing access to all tenant data |
+| `data/{mailbox}/`                   | Encrypted email messages, addressed by SHA-256 | Content is encrypted; S3 metadata is not                                       |
+| `attachments/{mailbox}/`            | Encrypted attachments, addressed by SHA-256    | Content is encrypted; S3 metadata is not                                       |
+| `manifests/{mailbox}/`              | Encrypted snapshot manifests (JSON)            | Contains subjects, folder names, delta URLs -- all encrypted                   |
+| `onedrive/data/{owner}/`            | Encrypted OneDrive files, addressed by SHA-256 | Content is encrypted; S3 metadata is not                                       |
+| `onedrive/manifests/{owner}/`       | Encrypted OneDrive snapshot manifests          | Contains changed-file entries for each OneDrive snapshot                       |
+| `onedrive/index/{owner}/files/`     | Encrypted per-file version indexes             | Enables listing all snapshot versions with backup timestamps                   |
+| `onedrive/_meta/{owner}/delta.json` | Encrypted OneDrive delta cursor                | Stores per-drive delta links and prior file state for incremental sync         |
 
 ### The `_meta/dek.enc` Object
 
@@ -61,11 +80,11 @@ Content-addressed storage also makes integrity verification straightforward -- d
 
 Each uploaded object includes S3 metadata headers:
 
-| Header | Value | Encrypted |
-| --- | --- | --- |
-| `x-amz-meta-x-message-id` | Microsoft Graph message ID | **No** -- visible to S3 access |
-| `x-amz-meta-x-plaintext-sha256` | SHA-256 of original plaintext | **No** -- visible to S3 access |
-| `Content-MD5` | MD5 of ciphertext (transport integrity) | N/A -- standard S3 header |
+| Header                          | Value                                   | Encrypted                      |
+| ------------------------------- | --------------------------------------- | ------------------------------ |
+| `x-amz-meta-x-message-id`       | Microsoft Graph message ID              | **No** -- visible to S3 access |
+| `x-amz-meta-x-plaintext-sha256` | SHA-256 of original plaintext           | **No** -- visible to S3 access |
+| `Content-MD5`                   | MD5 of ciphertext (transport integrity) | N/A -- standard S3 header      |
 
 ::: warning Metadata Visibility
 S3 object metadata is **not encrypted**. Anyone with S3 read access (e.g., `s3:GetObject` or `s3:ListBucket` with metadata) can see the Graph message IDs and plaintext hashes. The message **content** is encrypted, but the metadata reveals that specific messages exist and their content hashes. This is a trade-off: metadata enables deduplication checks and integrity verification without decryption, but it leaks existence information.

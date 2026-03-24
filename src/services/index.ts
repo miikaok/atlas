@@ -4,3 +4,6 @@ export { RestoreService } from '@/services/restore/restore.service';
 export { CatalogService } from '@/services/catalog/catalog.service';
 export { DeletionService } from '@/services/deletion/deletion.service';
 export { StatsService } from '@/services/stats/stats.service';
+export { OneDriveBackupService } from '@/services/onedrive/onedrive-backup.service';
+export { OneDriveCatalogService } from '@/services/onedrive/onedrive-catalog.service';
+export { OneDriveVerificationService } from '@/services/onedrive/onedrive-verification.service';

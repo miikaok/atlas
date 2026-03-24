@@ -105,8 +105,7 @@ export class S3ObjectStorage implements ObjectStorage {
       await this._client.send(new HeadObjectCommand({ Bucket: this._bucket, Key: key }));
       return true;
     } catch (err) {
-      const code = (err as { name?: string }).name;
-      if (code === 'NotFound' || code === 'NoSuchKey') return false;
+      if (is_not_found_error(err)) return false;
       throw err;
     }
   }
@@ -201,4 +200,18 @@ function is_backend_mode_rejection(err: unknown, mode?: string): boolean {
     error_text.includes('invalidrequest') ||
     error_text.includes('invalidargument')
   );
+}
+
+function is_not_found_error(err: unknown): boolean {
+  if (!(err && typeof err === 'object')) return false;
+
+  const typed_error = err as {
+    name?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
+  const code = typed_error.name;
+  const status = typed_error.$metadata?.httpStatusCode;
+
+  if (code === 'NotFound' || code === 'NoSuchKey') return true;
+  return code === 'UnknownError' && status === 404;
 }

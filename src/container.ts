@@ -6,6 +6,10 @@ import {
   TENANT_CONTEXT_FACTORY_TOKEN,
   RESTORE_CONNECTOR_TOKEN,
   MAILBOX_DISCOVERY_TOKEN,
+  ONEDRIVE_CONNECTOR_TOKEN,
+  ONEDRIVE_MANIFEST_REPOSITORY_TOKEN,
+  ONEDRIVE_FILE_INDEX_REPOSITORY_TOKEN,
+  ONEDRIVE_DELTA_CURSOR_REPOSITORY_TOKEN,
 } from '@/ports/tokens/outgoing.tokens';
 import {
   BACKUP_USE_CASE_TOKEN,
@@ -18,6 +22,9 @@ import {
   STATS_USE_CASE_TOKEN,
   STATUS_USE_CASE_TOKEN,
   TENANT_ORCHESTRATOR_TOKEN,
+  ONEDRIVE_BACKUP_USE_CASE_TOKEN,
+  ONEDRIVE_CATALOG_USE_CASE_TOKEN,
+  ONEDRIVE_VERIFICATION_USE_CASE_TOKEN,
 } from '@/ports/tokens/use-case.tokens';
 import { GraphMailboxConnector } from '@/adapters/m365/graph-mailbox-connector.adapter';
 import { GraphRestoreConnector } from '@/adapters/m365/graph-restore-connector.adapter';
@@ -36,8 +43,15 @@ import { StatsService } from '@/services/stats/stats.service';
 import { DefaultTenantBackupOrchestrator } from '@/services/backup/tenant-backup-orchestrator';
 import { MailboxStatusService } from '@/services/status/mailbox-status.service';
 import { GraphMailboxDiscoveryAdapter } from '@/adapters/m365/graph-mailbox-discovery.adapter';
+import { GraphOneDriveConnector } from '@/adapters/m365/graph-onedrive-connector.adapter';
 import type { AtlasConfig } from '@/utils/config';
 import { load_config, ATLAS_CONFIG_TOKEN } from '@/utils/config';
+import { S3OneDriveManifestRepository } from '@/adapters/storage-s3/s3-onedrive-manifest-repository.adapter';
+import { S3OneDriveFileVersionIndexRepository } from '@/adapters/storage-s3/s3-onedrive-file-version-index-repository.adapter';
+import { S3OneDriveDeltaCursorRepository } from '@/adapters/storage-s3/s3-onedrive-delta-cursor-repository.adapter';
+import { OneDriveBackupService } from '@/services/onedrive/onedrive-backup.service';
+import { OneDriveCatalogService } from '@/services/onedrive/onedrive-catalog.service';
+import { OneDriveVerificationService } from '@/services/onedrive/onedrive-verification.service';
 
 /** Creates and configures the application-wide DI container. */
 export function create_container(): Container {
@@ -78,6 +92,19 @@ function bind_adapters(container: Container): void {
   container.bind(TENANT_CONTEXT_FACTORY_TOKEN).to(DefaultTenantContextFactory).inSingletonScope();
   container.bind(MANIFEST_REPOSITORY_TOKEN).to(S3ManifestRepository).inSingletonScope();
   container.bind(MAILBOX_DISCOVERY_TOKEN).to(GraphMailboxDiscoveryAdapter).inSingletonScope();
+  container.bind(ONEDRIVE_CONNECTOR_TOKEN).to(GraphOneDriveConnector).inSingletonScope();
+  container
+    .bind(ONEDRIVE_MANIFEST_REPOSITORY_TOKEN)
+    .to(S3OneDriveManifestRepository)
+    .inSingletonScope();
+  container
+    .bind(ONEDRIVE_FILE_INDEX_REPOSITORY_TOKEN)
+    .to(S3OneDriveFileVersionIndexRepository)
+    .inSingletonScope();
+  container
+    .bind(ONEDRIVE_DELTA_CURSOR_REPOSITORY_TOKEN)
+    .to(S3OneDriveDeltaCursorRepository)
+    .inSingletonScope();
 }
 
 /** Binds service classes so Inversify can auto-resolve their constructor dependencies. */
@@ -102,4 +129,10 @@ function bind_services(container: Container): void {
   container.bind(STATUS_USE_CASE_TOKEN).toService(MailboxStatusService);
   container.bind(DefaultTenantBackupOrchestrator).toSelf();
   container.bind(TENANT_ORCHESTRATOR_TOKEN).toService(DefaultTenantBackupOrchestrator);
+  container.bind(OneDriveBackupService).toSelf();
+  container.bind(ONEDRIVE_BACKUP_USE_CASE_TOKEN).toService(OneDriveBackupService);
+  container.bind(OneDriveCatalogService).toSelf();
+  container.bind(ONEDRIVE_CATALOG_USE_CASE_TOKEN).toService(OneDriveCatalogService);
+  container.bind(OneDriveVerificationService).toSelf();
+  container.bind(ONEDRIVE_VERIFICATION_USE_CASE_TOKEN).toService(OneDriveVerificationService);
 }

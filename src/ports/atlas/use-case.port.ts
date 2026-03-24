@@ -8,6 +8,15 @@ import type { DeletionResult } from '@/ports/deletion/use-case.port';
 import type { StorageCheckRequest, StorageCheckResult } from '@/ports/storage-check/use-case.port';
 import type { BucketStats, MailboxStats } from '@/domain/stats';
 import type { MailboxStatusResult } from '@/ports/status/use-case.port';
+import type {
+  OneDriveBackupOptions,
+  OneDriveBackupResult,
+  OneDriveVerificationResult,
+} from '@/ports/onedrive/use-case.port';
+import type {
+  OneDriveFileVersionRecord,
+  OneDriveSnapshotManifest,
+} from '@/domain/onedrive-manifest';
 
 export interface AtlasInstanceConfig {
   readonly tenantId: string;
@@ -37,4 +46,8 @@ export interface AtlasInstance {
   getBucketStats(): Promise<BucketStats>;
   getMailboxStats(mailboxId: string): Promise<MailboxStats>;
   checkMailboxStatus(mailboxId: string): Promise<MailboxStatusResult>;
+  backupOneDrive(ownerId: string, options?: OneDriveBackupOptions): Promise<OneDriveBackupResult>;
+  listOneDriveSnapshots(ownerId: string): Promise<OneDriveSnapshotManifest[]>;
+  listOneDriveFileVersions(ownerId: string, fileRef: string): Promise<OneDriveFileVersionRecord[]>;
+  verifyOneDriveSnapshot(snapshotId: string): Promise<OneDriveVerificationResult>;
 }

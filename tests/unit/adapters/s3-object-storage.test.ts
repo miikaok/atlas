@@ -124,6 +124,16 @@ describe('S3ObjectStorage', () => {
       expect(await storage.exists('key')).toBe(false);
     });
 
+    it('returns false on UnknownError with 404 metadata', async () => {
+      mock_s3.send.mockRejectedValueOnce(
+        Object.assign(new Error(), {
+          name: 'UnknownError',
+          $metadata: { httpStatusCode: 404 },
+        }),
+      );
+      expect(await storage.exists('key')).toBe(false);
+    });
+
     it('rethrows unexpected errors', async () => {
       mock_s3.send.mockRejectedValueOnce(new Error('network failure'));
       await expect(storage.exists('key')).rejects.toThrow('network failure');

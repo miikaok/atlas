@@ -12,6 +12,8 @@ In the Azure Portal, register an application with the following **Application** 
 | `Mail.ReadWrite`       | Restore messages and create folders in target mailboxes | Restore only                     |
 | `User.Read.All`        | Enumerate users and resolve mailbox IDs                 | User discovery                   |
 | `MailboxSettings.Read` | Read mailbox metadata and folder structure              | Folder enumeration               |
+| `Files.Read.All`       | Read OneDrive files and drive item metadata             | OneDrive backup/catalog/verify   |
+| `Sites.Read.All`       | Access OneDrive-backed SharePoint drive surfaces        | OneDrive backup/catalog/verify   |
 
 ### Principle of Least Privilege
 

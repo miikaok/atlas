@@ -75,7 +75,41 @@ console.log(status.is_up_to_date, status.total_pending_changes);
 
 // check storage readiness
 const check = await atlas.checkStorage({ mode: 'GOVERNANCE', retention_days: 30 });
+
+// back up changed OneDrive files for one owner
+const oneDriveBackup = await atlas.backupOneDrive('user@company.com');
+
+// list OneDrive snapshots for one owner
+const oneDriveSnapshots = await atlas.listOneDriveSnapshots('user@company.com');
+
+// list all backed-up versions for one file
+const fileVersions = await atlas.listOneDriveFileVersions(
+  'user@company.com',
+  '/Documents/Finance/report.xlsx',
+);
+
+// verify OneDrive snapshot integrity + index consistency
+const oneDriveVerify = await atlas.verifyOneDriveSnapshot('od-snap-...');
 ```
+
+## OneDrive Workflow Methods
+
+The OneDrive API surface is intentionally separate from mailbox methods so applications can orchestrate each workload independently.
+
+Required Microsoft Graph **Application** permissions for OneDrive methods: `Files.Read.All`, `Sites.Read.All` (admin consent required).
+
+| Method                                       | Description                                                                                      |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `backupOneDrive(ownerId, options?)`          | Runs OneDrive backup for one owner. Creates a snapshot only when changed file state is detected. |
+| `listOneDriveSnapshots(ownerId)`             | Lists OneDrive snapshots for one owner, newest first.                                            |
+| `listOneDriveFileVersions(ownerId, fileRef)` | Lists per-file snapshot history (version timeline) by file ID or full path.                      |
+| `verifyOneDriveSnapshot(snapshotId)`         | Verifies OneDrive snapshot blobs and cross-checks version index references.                      |
+
+`backupOneDrive` options:
+
+| Option       | Type      | Description                                                    |
+| ------------ | --------- | -------------------------------------------------------------- |
+| `force_full` | `boolean` | Ignore saved OneDrive delta cursor and force full enumeration. |
 
 ## Save Options
 
@@ -122,4 +156,4 @@ for (const mailboxId of mailboxIds) {
 
 ## Exports
 
-The SDK exports its own types via `m365-atlas/sdk`. Domain types, port interfaces, and result types are available from the root `m365-atlas` import for advanced use cases. Status-related types (`MailboxStatusResult`, `FolderStatus`) are also exported from `m365-atlas/sdk`.
+The SDK exports its own types via `m365-atlas/sdk`. Domain types, port interfaces, and result types are available from the root `m365-atlas` import for advanced use cases. Status-related types (`MailboxStatusResult`, `FolderStatus`) and OneDrive workflow types (`OneDriveBackupResult`, `OneDriveVerificationResult`, `OneDriveSnapshotManifest`, `OneDriveFileVersionRecord`) are also exported from `m365-atlas/sdk`.
