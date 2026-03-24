@@ -35,4 +35,5 @@ export interface OneDriveConnector {
     prev_delta_link?: string,
   ): Promise<OneDriveDeltaResult>;
   download_file_content(item: OneDriveDeltaItem): Promise<Buffer>;
+  resolve_download_url(item: OneDriveDeltaItem): Promise<string | undefined>;
 }

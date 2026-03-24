@@ -11,6 +11,7 @@ describe('OneDriveCatalogService', () => {
       storage: {},
       encrypt: vi.fn(),
       decrypt: vi.fn(),
+      create_cipher: vi.fn(),
     }),
   } as unknown as TenantContextFactory;
 

@@ -137,6 +137,8 @@ atlas onedrive backup -o user@company.com -t <tenant-id>
 | `--full`            | Ignore saved OneDrive delta cursor and force full enumeration |
 | `-t, --tenant <id>` | Override tenant ID from config                                |
 
+**Large file handling.** Files >= 512 MB use a zero-disk streaming pipeline: the file is downloaded in 4 MB chunks (per-chunk retry, 5 attempts), and each chunk is simultaneously SHA-256 hashed and AES-256-GCM encrypted. Encrypted parts are streamed directly to an S3 staging key via multipart upload -- plaintext never touches disk. Once the stream completes, the SHA-256 checksum determines the content-addressed canonical key. If that key already exists (dedup hit), the multipart upload is aborted at zero storage cost; otherwise it is completed and server-side copied to the canonical key. Peak memory usage is ~24 MB regardless of file size. Smaller files below 4 MB use a single-request download; files between 4 MB and 512 MB use in-memory chunked range downloads. Transient errors (HTTP 429/503/504, socket resets, DNS failures) are retried automatically with exponential backoff.
+
 ## `atlas onedrive list-snapshots`
 
 List OneDrive snapshots for one owner.

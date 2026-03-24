@@ -8,6 +8,11 @@ import type {
   OneDriveDrive,
 } from '@/ports/onedrive/connector.port';
 import { is_invalid_delta_error, with_graph_retry } from '@/adapters/m365/graph-error-helpers';
+import {
+  CHUNK_DOWNLOAD_THRESHOLD,
+  compute_chunk_timeout_ms,
+  download_file_chunked,
+} from '@/adapters/m365/graph-onedrive-chunked-download';
 
 interface GraphCollectionResponse<T> {
   value?: T[];
@@ -119,10 +124,19 @@ export class GraphOneDriveConnector implements OneDriveConnector {
   }
 
   async download_file_content(item: OneDriveDeltaItem): Promise<Buffer> {
-    const initial_download_url = item.download_url ?? (await this.resolve_download_url(item));
-    if (initial_download_url) {
+    const download_url = item.download_url ?? (await this.resolve_download_url(item));
+
+    if (download_url && item.size_bytes > CHUNK_DOWNLOAD_THRESHOLD) {
       try {
-        return await download_from_url(initial_download_url, item.item_id);
+        return await download_file_chunked(download_url, item.size_bytes, item.item_id);
+      } catch {
+        return await this.download_via_graph_content(item);
+      }
+    }
+
+    if (download_url) {
+      try {
+        return await download_from_url(download_url, item.size_bytes, item.item_id);
       } catch {
         return await this.download_via_graph_content(item);
       }
@@ -131,7 +145,7 @@ export class GraphOneDriveConnector implements OneDriveConnector {
     return await this.download_via_graph_content(item);
   }
 
-  private async resolve_download_url(item: OneDriveDeltaItem): Promise<string | undefined> {
+  async resolve_download_url(item: OneDriveDeltaItem): Promise<string | undefined> {
     const response = await with_graph_retry(
       () =>
         this._client
@@ -143,6 +157,7 @@ export class GraphOneDriveConnector implements OneDriveConnector {
   }
 
   private async download_via_graph_content(item: OneDriveDeltaItem): Promise<Buffer> {
+    const stream_timeout_ms = compute_chunk_timeout_ms(item.size_bytes);
     const stream = await with_timeout(
       with_graph_retry(
         () =>
@@ -150,10 +165,11 @@ export class GraphOneDriveConnector implements OneDriveConnector {
             .api(`/drives/${item.drive_id}/items/${item.item_id}/content`)
             .getStream() as Promise<NodeJS.ReadableStream>,
       ),
-      45_000,
+      stream_timeout_ms,
       `Graph content request timed out for file ${item.item_id}`,
     );
-    return await stream_to_buffer(stream);
+    const drain_timeout_ms = compute_chunk_timeout_ms(item.size_bytes) * 2;
+    return await stream_to_buffer(stream, drain_timeout_ms);
   }
 
   private async execute_delta(
@@ -247,9 +263,14 @@ function throw_missing_onedrive_permissions(): never {
   );
 }
 
-async function download_from_url(download_url: string, item_id: string): Promise<Buffer> {
+async function download_from_url(
+  download_url: string,
+  size_bytes: number,
+  item_id: string,
+): Promise<Buffer> {
+  const timeout_ms = compute_chunk_timeout_ms(size_bytes);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45_000);
+  const timeout = setTimeout(() => controller.abort(), timeout_ms);
   try {
     const response = await fetch(download_url, { signal: controller.signal });
     if (!response.ok) {
@@ -262,14 +283,17 @@ async function download_from_url(download_url: string, item_id: string): Promise
   }
 }
 
-async function stream_to_buffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+async function stream_to_buffer(
+  stream: NodeJS.ReadableStream,
+  timeout_ms: number,
+): Promise<Buffer> {
   const chunks: Buffer[] = [];
   const read_stream = async (): Promise<void> => {
     for await (const chunk of stream) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
   };
-  await with_timeout(read_stream(), 90_000, 'Graph content stream timed out');
+  await with_timeout(read_stream(), timeout_ms, 'Graph content stream timed out');
   return Buffer.concat(chunks);
 }
 

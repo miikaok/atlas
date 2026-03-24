@@ -62,13 +62,25 @@ export function derive_kek(passphrase: string, tenant_id: string): Buffer {
   });
 }
 
+const CIPHER_CHUNK_SIZE = 64 * 1024 * 1024;
+
 /** AES-256-GCM encrypt. Returns: [IV (12)] [auth tag (16)] [ciphertext]. */
 function aes_gcm_encrypt(plaintext: Buffer, key: Buffer): Buffer {
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
-  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+
+  const encrypted_chunks: Buffer[] = [iv];
+  encrypted_chunks.push(Buffer.alloc(AUTH_TAG_LENGTH));
+
+  for (let offset = 0; offset < plaintext.length; offset += CIPHER_CHUNK_SIZE) {
+    const end = Math.min(offset + CIPHER_CHUNK_SIZE, plaintext.length);
+    encrypted_chunks.push(cipher.update(plaintext.subarray(offset, end)));
+  }
+  encrypted_chunks.push(cipher.final());
+
   const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, tag, encrypted]);
+  encrypted_chunks[1] = tag;
+  return Buffer.concat(encrypted_chunks);
 }
 
 /** AES-256-GCM decrypt. Expects format: [IV (12)] [auth tag (16)] [ciphertext]. */
@@ -83,5 +95,12 @@ function aes_gcm_decrypt(blob: Buffer, key: Buffer): Buffer {
 
   const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+
+  const decrypted_chunks: Buffer[] = [];
+  for (let offset = 0; offset < ciphertext.length; offset += CIPHER_CHUNK_SIZE) {
+    const end = Math.min(offset + CIPHER_CHUNK_SIZE, ciphertext.length);
+    decrypted_chunks.push(decipher.update(ciphertext.subarray(offset, end)));
+  }
+  decrypted_chunks.push(decipher.final());
+  return Buffer.concat(decrypted_chunks);
 }

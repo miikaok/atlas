@@ -6,6 +6,13 @@ export interface TenantStorageContext {
   readonly storage: ObjectStorage;
 }
 
+/** Streaming cipher returned by create_cipher(). */
+export interface StreamingCipher {
+  update(chunk: Buffer): Buffer;
+  final(): Buffer;
+  getAuthTag(): Buffer;
+}
+
 /** Tenant-scoped encryption/decryption operations. */
 export interface TenantCryptoContext {
   /** Encrypts plaintext with this tenant's data encryption key. */
@@ -13,6 +20,9 @@ export interface TenantCryptoContext {
 
   /** Decrypts ciphertext with this tenant's data encryption key. */
   decrypt(data: Buffer): Buffer;
+
+  /** Creates a fresh AES-256-GCM cipher + IV for streaming encryption. */
+  create_cipher(): { cipher: StreamingCipher; iv: Buffer };
 }
 
 /** Bundles tenant-scoped storage and encryption for a single tenant. */

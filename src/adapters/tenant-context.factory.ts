@@ -1,3 +1,4 @@
+import { randomBytes, createCipheriv } from 'node:crypto';
 import { inject, injectable } from 'inversify';
 import type { S3Client } from '@aws-sdk/client-s3';
 import { S3_CLIENT_TOKEN } from '@/adapters/storage-s3/s3-client.factory';
@@ -5,10 +6,18 @@ import { S3ObjectStorage } from '@/adapters/storage-s3/s3-object-storage.adapter
 import { ensure_bucket_exists } from '@/adapters/storage-s3/s3-bucket-manager';
 import { tenant_bucket_name } from '@/adapters/storage-s3/tenant-bucket-name';
 import { EnvelopeKeyService } from '@/adapters/keystore/envelope-key-service.adapter';
-import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context.port';
+import type {
+  TenantContext,
+  TenantContextFactory,
+  StreamingCipher,
+} from '@/ports/tenant/context.port';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
 import { logger } from '@/utils/logger';
+
+const AES_GCM_ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12;
+const AUTH_TAG_LENGTH = 16;
 
 const DEK_META_KEY = '_meta/dek.enc';
 
@@ -38,6 +47,13 @@ export class DefaultTenantContextFactory implements TenantContextFactory {
       storage,
       encrypt: (data: Buffer): Buffer => key_service.encrypt(data, dek),
       decrypt: (data: Buffer): Buffer => key_service.decrypt(data, dek),
+      create_cipher: (): { cipher: StreamingCipher; iv: Buffer } => {
+        const iv = randomBytes(IV_LENGTH);
+        const cipher = createCipheriv(AES_GCM_ALGORITHM, dek, iv, {
+          authTagLength: AUTH_TAG_LENGTH,
+        });
+        return { cipher, iv };
+      },
     };
   }
 

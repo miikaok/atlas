@@ -96,7 +96,7 @@ Atlas validates data integrity at three independent layers. Each layer catches a
 | Layer         | Mechanism                           | What It Catches                                          | When                                 |
 | ------------- | ----------------------------------- | -------------------------------------------------------- | ------------------------------------ |
 | **Plaintext** | SHA-256 checksum stored in manifest | Corruption before encryption, application bugs           | Backup, verify, save                 |
-| **Transport** | `Content-MD5` header on S3 PUT      | Network corruption during upload (bit flips, truncation) | Every upload (S3 rejects mismatches) |
+| **Transport** | `Content-MD5` header on S3 PUT / per-part in multipart | Network corruption during upload (bit flips, truncation) | Every upload (S3 rejects mismatches) |
 | **At-rest**   | AES-256-GCM authentication tag      | Storage-level tampering or corruption                    | Every decrypt operation              |
 
 ### How Verification Works
@@ -113,3 +113,17 @@ When you run `atlas verify`, Atlas performs a full integrity check for a snapsho
 ### Content-MD5 on Uploads
 
 Every object uploaded to S3 includes a `Content-MD5` header computed from the **ciphertext** (not the plaintext). This is a transport integrity check -- if a network error corrupts the data in flight, S3 will reject the upload with a checksum mismatch. This is separate from the application-layer SHA-256, which validates the original plaintext content.
+
+For large files (> 64 MB encrypted), Atlas uses S3 multipart upload. Each individual part carries its own `Content-MD5` header, maintaining the same transport integrity guarantee as single-object uploads. If any part fails integrity validation, the entire multipart upload is aborted and orphaned parts are cleaned up.
+
+### Large File Encryption (Zero-Disk Streaming)
+
+For OneDrive files >= 512 MB, Atlas uses a zero-disk streaming pipeline that encrypts data on the fly without ever writing plaintext to disk:
+
+1. **Single-pass streaming**: The file is downloaded in 4 MB chunks from Microsoft Graph. Each chunk is simultaneously fed to a SHA-256 hash and an AES-256-GCM cipher.
+2. **Encrypted multipart upload**: Ciphertext is accumulated in 8 MB buffers and uploaded as S3 multipart parts to a temporary staging key. Peak memory is ~24 MB regardless of file size.
+3. **Deferred part 1 (auth tag)**: AES-256-GCM produces the authentication tag only after all data is processed. Atlas holds the first ~8 MB of ciphertext in memory and uploads it as part 1 after `cipher.final()`, prepending the IV (12 bytes) and auth tag (16 bytes). S3 multipart upload allows uploading parts in any order; `CompleteMultipartUpload` assembles them in ascending order, preserving the `[IV][auth_tag][ciphertext]` format that the decryption path expects.
+4. **Content-addressed dedup**: After the stream completes, the SHA-256 hash determines the canonical storage key. If that key already exists, the multipart upload is aborted (zero permanent storage cost). Otherwise, it is completed and server-side copied to the canonical key. The staging key is then deleted.
+5. **Crash safety**: On startup, `cleanup_stale_staging()` deletes any leftover staging objects and aborts incomplete multipart uploads from killed processes. This is fully self-cleaning and does not depend on S3 bucket lifecycle policies.
+
+Plaintext data exists only as in-flight 4 MB buffers in process memory. No temporary files are created. A `kill -9` leaves only encrypted staging data in S3, which is cleaned up on the next run.

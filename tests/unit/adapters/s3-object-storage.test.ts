@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { S3ObjectStorage } from '@/adapters/storage-s3/s3-object-storage.adapter';
 import { reset_bucket_cache } from '@/adapters/storage-s3/s3-bucket-manager';
+import { MULTIPART_THRESHOLD } from '@/adapters/storage-s3/s3-multipart-upload';
 import {
   ObjectLockUnsupportedError,
   ObjectLockVersioningDisabledError,
@@ -92,6 +93,30 @@ describe('S3ObjectStorage', () => {
           retain_until: '2026-04-08T12:00:00.000Z',
         }),
       ).rejects.toBeInstanceOf(ObjectLockUnsupportedError);
+    });
+  });
+
+  describe('put (multipart routing)', () => {
+    it('routes large payloads through multipart upload', async () => {
+      const data = Buffer.alloc(MULTIPART_THRESHOLD + 1, 0xff);
+      mock_s3.send
+        .mockResolvedValueOnce({ UploadId: 'mp-1' })
+        .mockResolvedValue({ ETag: '"etag"' });
+
+      await storage.put('big-key', data);
+
+      const create_cmd = mock_s3.send.mock.calls[0][0];
+      expect(create_cmd.constructor.name).toBe('CreateMultipartUploadCommand');
+    });
+
+    it('uses single PUT for small payloads', async () => {
+      const data = Buffer.from('small');
+      mock_s3.send.mockResolvedValueOnce({});
+
+      await storage.put('small-key', data);
+
+      const cmd = mock_s3.send.mock.calls[0][0];
+      expect(cmd.constructor.name).toBe('PutObjectCommand');
     });
   });
 

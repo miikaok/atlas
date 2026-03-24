@@ -21,6 +21,7 @@ describe('OneDriveVerificationService', () => {
       },
       encrypt: vi.fn((data: Buffer) => data),
       decrypt: vi.fn((data: Buffer) => data),
+      create_cipher: vi.fn(),
     }),
   } as unknown as TenantContextFactory;
 

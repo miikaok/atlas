@@ -44,6 +44,7 @@ export default defineConfig({
       {
         text: 'Operations',
         items: [
+          { text: 'OneDrive Backup', link: '/onedrive-backup' },
           { text: 'Immutability & Object Lock', link: '/operations/immutability' },
           { text: 'Delta Sync', link: '/operations/delta-sync' },
           { text: 'Storage Layout', link: '/operations/storage-layout' },

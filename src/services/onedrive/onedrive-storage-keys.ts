@@ -1,4 +1,7 @@
+import { randomBytes } from 'node:crypto';
+
 export const ONEDRIVE_DATA_PREFIX = 'onedrive/data';
+export const ONEDRIVE_STAGING_PREFIX = 'onedrive/staging';
 export const ONEDRIVE_MANIFEST_PREFIX = 'onedrive/manifests';
 export const ONEDRIVE_INDEX_PREFIX = 'onedrive/index';
 export const ONEDRIVE_META_PREFIX = 'onedrive/_meta';
@@ -29,6 +32,15 @@ export function onedrive_index_prefix(owner_id: string): string {
 
 export function onedrive_index_root_prefix(): string {
   return `${ONEDRIVE_INDEX_PREFIX}/`;
+}
+
+export function onedrive_staging_key(owner_id: string, item_id: string): string {
+  const suffix = randomBytes(4).toString('hex');
+  return `${ONEDRIVE_STAGING_PREFIX}/${owner_id}/${item_id}-${suffix}`;
+}
+
+export function onedrive_staging_prefix(owner_id: string): string {
+  return `${ONEDRIVE_STAGING_PREFIX}/${owner_id}/`;
 }
 
 export function onedrive_delta_cursor_key(owner_id: string): string {

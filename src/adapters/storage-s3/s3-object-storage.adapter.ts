@@ -7,10 +7,14 @@ import {
   ListObjectVersionsCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  CreateMultipartUploadCommand,
+  ListMultipartUploadsCommand,
+  AbortMultipartUploadCommand,
   type S3Client,
 } from '@aws-sdk/client-s3';
 import type {
   ObjectStorage,
+  MultipartUploadHandle,
   StorageImmutabilityProbeRequest,
   StorageImmutabilityProbeResult,
   StorageObjectLockPolicy,
@@ -21,6 +25,10 @@ import {
   ObjectLockUnsupportedError,
   ObjectLockVersioningDisabledError,
 } from '@/adapters/storage-s3/object-lock.errors';
+import { MULTIPART_THRESHOLD, put_multipart } from '@/adapters/storage-s3/s3-multipart-upload';
+import { S3MultipartUploadHandle } from '@/adapters/storage-s3/s3-multipart-upload-handle';
+import { copy_object } from '@/adapters/storage-s3/s3-server-side-copy';
+import { logger } from '@/utils/logger';
 
 /**
  * S3-backed ObjectStorage scoped to a single bucket.
@@ -32,7 +40,7 @@ export class S3ObjectStorage implements ObjectStorage {
     private readonly _bucket: string,
   ) {}
 
-  /** Uploads data with a Content-MD5 header for transport integrity verification. */
+  /** Uploads data, routing through multipart for large payloads. */
   async put(
     key: string,
     data: Buffer,
@@ -40,8 +48,13 @@ export class S3ObjectStorage implements ObjectStorage {
     object_lock_policy?: StorageObjectLockPolicy,
   ): Promise<void> {
     await this.validate_immutability_policy(object_lock_policy);
-    const content_md5 = createHash('md5').update(data).digest('base64');
 
+    if (data.length > MULTIPART_THRESHOLD) {
+      await put_multipart(this._client, this._bucket, key, data, metadata, object_lock_policy);
+      return;
+    }
+
+    const content_md5 = createHash('md5').update(data).digest('base64');
     try {
       await this._client.send(
         new PutObjectCommand({
@@ -177,6 +190,88 @@ export class S3ObjectStorage implements ObjectStorage {
     } while (true);
 
     return versions;
+  }
+
+  /** Starts a multipart upload, returning a handle for part-level control. */
+  async begin_multipart_upload(
+    key: string,
+    metadata?: Record<string, string>,
+    object_lock_policy?: StorageObjectLockPolicy,
+  ): Promise<MultipartUploadHandle> {
+    const { UploadId } = await this._client.send(
+      new CreateMultipartUploadCommand({
+        Bucket: this._bucket,
+        Key: key,
+        Metadata: metadata,
+        ObjectLockMode: object_lock_policy?.mode,
+        ObjectLockRetainUntilDate: object_lock_policy?.retain_until
+          ? new Date(object_lock_policy.retain_until)
+          : undefined,
+      }),
+    );
+
+    if (!UploadId) throw new Error(`CreateMultipartUpload returned no UploadId for ${key}`);
+    return new S3MultipartUploadHandle(this._client, this._bucket, key, UploadId);
+  }
+
+  /** Server-side copy from source to destination within the same bucket. */
+  async copy(
+    source_key: string,
+    dest_key: string,
+    metadata?: Record<string, string>,
+    object_lock_policy?: StorageObjectLockPolicy,
+  ): Promise<void> {
+    await copy_object(
+      this._client,
+      this._bucket,
+      source_key,
+      dest_key,
+      metadata,
+      object_lock_policy,
+    );
+  }
+
+  /** Aborts all incomplete multipart uploads under the given prefix. */
+  async abort_incomplete_uploads(prefix: string): Promise<number> {
+    let aborted = 0;
+    let key_marker: string | undefined;
+    let upload_id_marker: string | undefined;
+
+    do {
+      const response = await this._client.send(
+        new ListMultipartUploadsCommand({
+          Bucket: this._bucket,
+          Prefix: prefix,
+          KeyMarker: key_marker,
+          UploadIdMarker: upload_id_marker,
+        }),
+      );
+
+      for (const upload of response.Uploads ?? []) {
+        if (!upload.Key || !upload.UploadId) continue;
+        try {
+          await this._client.send(
+            new AbortMultipartUploadCommand({
+              Bucket: this._bucket,
+              Key: upload.Key,
+              UploadId: upload.UploadId,
+            }),
+          );
+          aborted++;
+        } catch (err) {
+          logger.warn(
+            `Failed to abort stale upload ${upload.UploadId}: ` +
+              `${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      key_marker = response.NextKeyMarker;
+      upload_id_marker = response.NextUploadIdMarker;
+      if (!response.IsTruncated) break;
+    } while (true);
+
+    return aborted;
   }
 
   private async validate_immutability_policy(policy?: StorageObjectLockPolicy): Promise<void> {

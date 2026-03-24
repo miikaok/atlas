@@ -23,6 +23,9 @@ function make_storage(): ObjectStorage {
       object_lock_enabled: true,
       mode_supported: true,
     }),
+    begin_multipart_upload: vi.fn(),
+    copy: vi.fn(),
+    abort_incomplete_uploads: vi.fn().mockResolvedValue(0),
   };
 }
 
@@ -43,6 +46,7 @@ describe('OneDriveBackupService', () => {
       storage,
       encrypt: vi.fn((data: Buffer) => data),
       decrypt: vi.fn((data: Buffer) => data),
+      create_cipher: vi.fn(),
     };
 
     tenant_factory = { create: vi.fn().mockResolvedValue(context) };
@@ -50,6 +54,7 @@ describe('OneDriveBackupService', () => {
       list_drives: vi.fn().mockResolvedValue([{ drive_id: 'd1', drive_name: 'Drive 1' }]),
       fetch_delta: vi.fn(),
       download_file_content: vi.fn().mockResolvedValue(Buffer.from('file-body')),
+      resolve_download_url: vi.fn().mockResolvedValue('https://download.example/resolved'),
     };
     manifests = {
       save: vi.fn(),

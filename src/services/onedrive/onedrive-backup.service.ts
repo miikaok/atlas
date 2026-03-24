@@ -24,6 +24,12 @@ import {
   TENANT_CONTEXT_FACTORY_TOKEN,
 } from '@/ports/tokens/outgoing.tokens';
 import { onedrive_data_key } from '@/services/onedrive/onedrive-storage-keys';
+import { download_with_retry } from '@/services/onedrive/onedrive-download-orchestrator';
+import {
+  LARGE_FILE_THRESHOLD,
+  process_large_file,
+  cleanup_stale_staging,
+} from '@/services/onedrive/onedrive-large-file-pipeline';
 import { logger } from '@/utils/logger';
 
 @injectable()
@@ -62,6 +68,8 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
     const previous_etag_by_file_id: Record<string, string> = {
       ...(previous_cursor?.previous_etag_by_file_id ?? {}),
     };
+
+    await cleanup_stale_staging(ctx, owner_id);
 
     const entries: OneDriveManifestEntry[] = [];
     let files_stored = 0;
@@ -110,25 +118,36 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
           continue;
         }
 
-        let raw_body: Buffer;
-        try {
-          raw_body = await this._connector.download_file_content(item);
-        } catch (err) {
-          const reason = err instanceof Error ? err.message : String(err);
-          logger.warn(`Skipping OneDrive item ${item.item_id}: ${reason}`);
-          continue;
-        }
-        const checksum = createHash('sha256').update(raw_body).digest('hex');
-        const storage_key = onedrive_data_key(owner_id, checksum);
-        const exists = await ctx.storage.exists(storage_key);
-        if (!exists) {
-          await ctx.storage.put(storage_key, ctx.encrypt(raw_body), {
-            'x-onedrive-file-id': item.item_id,
-            'x-plaintext-sha256': checksum,
-          });
-          files_stored++;
+        let storage_key: string;
+        let checksum: string;
+
+        if (item.size_bytes >= LARGE_FILE_THRESHOLD) {
+          try {
+            const result = await process_large_file(this._connector, item, owner_id, ctx);
+            storage_key = result.storage_key;
+            checksum = result.checksum;
+            if (result.deduplicated) files_deduplicated++;
+            if (result.stored) files_stored++;
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : String(err);
+            logger.warn(`Skipping large file ${item.item_id} (${item.file_name}): ${reason}`);
+            continue;
+          }
         } else {
-          files_deduplicated++;
+          const raw_body = await download_with_retry(this._connector, item);
+          if (!raw_body) continue;
+          checksum = compute_sha256_chunked(raw_body);
+          storage_key = onedrive_data_key(owner_id, checksum);
+          const exists = await ctx.storage.exists(storage_key);
+          if (!exists) {
+            await ctx.storage.put(storage_key, ctx.encrypt(raw_body), {
+              'x-onedrive-file-id': item.item_id,
+              'x-plaintext-sha256': checksum,
+            });
+            files_stored++;
+          } else {
+            files_deduplicated++;
+          }
         }
 
         entries.push({
@@ -159,9 +178,9 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
       previous_etag_by_file_id,
       updated_at: new Date().toISOString(),
     };
-    await this._cursors.save(ctx, cursor);
 
     if (entries.length === 0) {
+      await this._cursors.save(ctx, cursor);
       return {
         owner_id,
         snapshot: undefined,
@@ -196,6 +215,8 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
         change_type: entry.change_type,
       });
     }
+
+    await this._cursors.save(ctx, cursor);
 
     return {
       owner_id,
@@ -263,4 +284,15 @@ function ensure_drives_discovered(drive_count: number): void {
   throw new Error(
     'Missing Microsoft Graph application permissions for OneDrive: Files.Read.All, Sites.Read.All.',
   );
+}
+
+const HASH_CHUNK_SIZE = 64 * 1024 * 1024;
+
+/** Computes SHA-256 in chunks to avoid ERR_OUT_OF_RANGE on buffers > 2 GB. */
+function compute_sha256_chunked(data: Buffer): string {
+  const hash = createHash('sha256');
+  for (let offset = 0; offset < data.length; offset += HASH_CHUNK_SIZE) {
+    hash.update(data.subarray(offset, Math.min(offset + HASH_CHUNK_SIZE, data.length)));
+  }
+  return hash.digest('hex');
 }
