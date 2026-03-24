@@ -1,0 +1,195 @@
+:root {
+  --vp-c-brand-1: #7c3aed;
+  --vp-c-brand-2: #6366f1;
+  --vp-c-brand-3: #818cf8;
+  --vp-c-brand-soft: rgba(124, 58, 237, 0.14);
+}
+
+.dark {
+  --vp-c-bg: #0a0a12;
+  --vp-c-bg-alt: #10111a;
+  --vp-c-bg-elv: #141522;
+  --vp-c-bg-soft: #1a1b2e;
+
+  --vp-c-brand-1: #818cf8;
+  --vp-c-brand-2: #7c3aed;
+  --vp-c-brand-3: #6366f1;
+  --vp-c-brand-soft: rgba(129, 140, 248, 0.14);
+
+  --vp-c-text-1: #e2e0ff;
+  --vp-c-text-2: #a8a5c8;
+  --vp-c-text-3: #6e6b8a;
+
+  --vp-c-divider: #2a2b45;
+  --vp-c-gutter: #1a1b2e;
+
+  --vp-c-default-1: #2a2b45;
+  --vp-c-default-2: #22233a;
+  --vp-c-default-3: #1a1b2e;
+  --vp-c-default-soft: rgba(42, 43, 69, 0.4);
+
+  --vp-c-tip-1: #818cf8;
+  --vp-c-tip-2: #6366f1;
+  --vp-c-tip-3: #4f46e5;
+  --vp-c-tip-soft: rgba(129, 140, 248, 0.14);
+
+  --vp-c-warning-1: #f59e0b;
+  --vp-c-warning-2: #d97706;
+  --vp-c-warning-3: #b45309;
+  --vp-c-warning-soft: rgba(245, 158, 11, 0.14);
+
+  --vp-c-danger-1: #f87171;
+  --vp-c-danger-2: #ef4444;
+  --vp-c-danger-3: #dc2626;
+  --vp-c-danger-soft: rgba(248, 113, 113, 0.14);
+
+  --vp-code-block-bg: #0d0d18;
+  --vp-code-line-highlight-color: rgba(129, 140, 248, 0.08);
+  --vp-code-tab-active-bar-color: #818cf8;
+
+  --vp-button-brand-bg: #7c3aed;
+  --vp-button-brand-hover-bg: #6d28d9;
+  --vp-button-brand-active-bg: #5b21b6;
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #ffffff;
+
+  --vp-button-alt-bg: #1a1b2e;
+  --vp-button-alt-hover-bg: #22233a;
+  --vp-button-alt-active-bg: #2a2b45;
+  --vp-button-alt-border: #2a2b45;
+  --vp-button-alt-text: #e2e0ff;
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, #818cf8 0%, #7c3aed 40%, #c084fc 100%);
+  --vp-home-hero-image-background-image: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.3) 0%,
+    rgba(99, 102, 241, 0.3) 100%
+  );
+  --vp-home-hero-image-filter: blur(56px);
+
+  --vp-nav-bg: rgba(10, 10, 18, 0.85);
+
+  --vp-sidebar-bg: #0d0d18;
+
+  --vp-carbon-ads-bg: #10111a;
+}
+
+.dark .VPNav {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.dark .VPSidebar {
+  border-right-color: #1a1b2e;
+}
+
+.dark .VPDoc .content-container {
+  border-top-color: #1a1b2e;
+}
+
+.dark .vp-doc a {
+  color: #818cf8;
+  text-decoration: none;
+}
+
+.dark .vp-doc a:hover {
+  color: #a5b4fc;
+  text-decoration: underline;
+}
+
+.dark .VPFeature {
+  background-color: #10111a;
+  border-color: #1a1b2e;
+  transition:
+    border-color 0.25s,
+    box-shadow 0.25s;
+}
+
+.dark .VPFeature:hover {
+  border-color: #7c3aed;
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.15);
+}
+
+.dark .vp-doc h1,
+.dark .vp-doc h2,
+.dark .vp-doc h3 {
+  color: #f0eeff;
+}
+
+.dark .vp-doc h2 {
+  border-top-color: #1a1b2e;
+}
+
+.dark .vp-doc th {
+  background-color: #10111a;
+  color: #c4c0e8;
+}
+
+.dark .vp-doc tr {
+  background-color: #0a0a12;
+  border-top-color: #1a1b2e;
+}
+
+.dark .vp-doc tr:nth-child(2n) {
+  background-color: #0d0d18;
+}
+
+.dark .vp-doc table {
+  border-color: #1a1b2e;
+}
+
+.dark .vp-doc td,
+.dark .vp-doc th {
+  border-color: #1a1b2e;
+}
+
+.dark .custom-block.tip {
+  border-color: #4f46e5;
+  background-color: rgba(79, 70, 229, 0.08);
+}
+
+.dark .custom-block.warning {
+  border-color: #b45309;
+  background-color: rgba(180, 83, 9, 0.08);
+}
+
+.dark .custom-block.danger {
+  border-color: #dc2626;
+  background-color: rgba(220, 38, 38, 0.08);
+}
+
+.dark .custom-block.details {
+  border-color: #2a2b45;
+  background-color: rgba(26, 27, 46, 0.5);
+}
+
+.dark .vp-doc code {
+  background-color: rgba(129, 140, 248, 0.1);
+  color: #c4b5fd;
+}
+
+.dark .vp-doc div[class*='language-'] {
+  border: 1px solid #1a1b2e;
+}
+
+.dark .vp-doc div[class*='language-'] span.lang {
+  color: #6e6b8a;
+}
+
+.dark .VPLocalSearchBox .search-input {
+  background-color: #10111a;
+  border-color: #2a2b45;
+}
+
+.dark .VPNavBarSearch button.search {
+  border-color: #2a2b45;
+}
+
+.dark .vp-doc .header-anchor {
+  color: #818cf8;
+}
+
+.dark .vp-doc .header-anchor:hover {
+  color: #a5b4fc;
+}

@@ -2,6 +2,9 @@ src/
 tests/
 coverage/
 docker/
+docs/
+.cursor/
+.github/
 .env
 .env.*
 .gitignore

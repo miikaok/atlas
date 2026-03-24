@@ -1,0 +1,308 @@
+# CLI Commands
+
+Complete reference for every Atlas CLI command.
+
+## `atlas backup`
+
+Back up mailboxes from an M365 tenant to object storage. When a mailbox is specified with `-m`, backs up that single mailbox with a per-folder progress dashboard. When no mailbox is specified, discovers all Exchange-licensed mailboxes in the tenant and backs them up in parallel.
+
+**Single mailbox:**
+
+```bash
+atlas backup -m user@company.com                      # incremental backup
+atlas backup -m user@company.com --full                # force full sync (ignore delta state)
+atlas backup -m user@company.com -f Inbox Sent         # specific folders only
+atlas backup -m user@company.com -P 50                 # larger page size for fewer API round-trips
+atlas backup -m user@company.com --retention-days 30 --lock-mode governance
+atlas backup -m user@company.com --retention-days 365 --lock-mode compliance
+atlas backup -t <tenant-id> -m user@company.com        # explicit tenant
+```
+
+**Full tenant (all licensed mailboxes):**
+
+```bash
+atlas backup                                           # back up all licensed mailboxes (4 concurrent)
+atlas backup -C 8                                      # increase parallel workers to 8
+atlas backup --full                                    # force full sync for all mailboxes
+```
+
+| Option                   | Description                                                    |
+| ------------------------ | -------------------------------------------------------------- |
+| `-m, --mailbox <id>`     | Specific mailbox to back up (backs up all licensed if omitted) |
+| `-f, --folder <name...>` | Filter to specific folder(s) by display name                   |
+| `--full`                 | Ignore saved delta links, run full enumeration                 |
+| `-P, --page-size <n>`    | Graph API page size per delta request (1--100, default 10)     |
+| `-C, --concurrency <n>`  | Parallel mailbox count for tenant backup (default 4)           |
+| `--retention-days <n>`   | Apply Object Lock retention for `n` days                       |
+| `--lock-mode <mode>`     | Object Lock mode (`governance` or `compliance`)                |
+| `--require-immutability` | Fail if immutability cannot be enforced                        |
+| `-t, --tenant <id>`      | Override tenant ID from config                                 |
+
+::: tip Tenant-wide mode
+When no `-m` flag is given, Atlas discovers all Exchange Online-licensed mailboxes via Microsoft Graph, then runs up to `-C` concurrent backup workers. A compact dashboard shows each active worker's mailbox, folder progress, and overall completion. The first Ctrl+C gracefully finishes active mailboxes; a second Ctrl+C force-quits immediately.
+:::
+
+::: details Page size tuning
+The `--page-size` flag controls how many messages are requested per Graph API delta page via the `Prefer: odata.maxpagesize` header. This is a _hint_ -- the server may return fewer items when response payloads are large (e.g. messages with heavy HTML bodies or many inline images). Lower values reduce memory pressure and allow partial progress to be saved more frequently during interrupts. Higher values reduce HTTP round-trips but increase per-page processing time. The default of 10 is a conservative starting point; increase if you have many small messages and want fewer round-trips.
+:::
+
+::: details Immutability behavior
+`--retention-days` makes the backup immutable-requested. Atlas resolves retention to an internal UTC `retain_until`, probes bucket capability (versioning + Object Lock), and fails fast when unsupported instead of silently downgrading to mutable writes.
+:::
+
+## `atlas status`
+
+Check whether a mailbox backup is up to date by peeking at Microsoft Graph delta state. This does **not** run a backup -- it only queries the delta endpoint with the saved delta links from the latest manifest to detect pending changes.
+
+```bash
+atlas status -m user@company.com
+atlas status -m user@company.com -t <tenant-id>
+```
+
+| Option                  | Description                    |
+| ----------------------- | ------------------------------ |
+| `-m, --mailbox <email>` | Mailbox to check (required)    |
+| `-t, --tenant <id>`     | Override tenant ID from config |
+
+Example output:
+
+```
+------------------
+-- Atlas Status --
+------------------
+[*] Tenant:  ec216cb5-...
+[*] Mailbox: user@company.com
+[*] Last backup: 2026-03-18 14:30 (snap-abc123)
+
+  Folder                      Status              Pending
+  ---------------------------------------------------------
+  Inbox                       up-to-date          0
+  Sent Items                  3 change(s)         3
+  Archive                     never backed up     -
+  ---------------------------------------------------------
+
+[*] Overall: 3 pending change(s), 1 folder(s) never backed up across 3 folder(s)
+```
+
+## `atlas mailboxes`
+
+List tenant mailboxes directly from Microsoft Graph (live data, not from the backup catalog). Shows email address, display name, Exchange Online license status, account status, creation date, and optionally mailbox size.
+
+```bash
+atlas mailboxes
+atlas mailboxes --licensed-only
+atlas mailboxes -t <tenant-id>
+```
+
+| Option              | Description                                                |
+| ------------------- | ---------------------------------------------------------- |
+| `--licensed-only`   | Only show mailboxes with an active Exchange Online license |
+| `-t, --tenant <id>` | Override tenant ID from config                             |
+
+::: tip
+Mailbox size requires the `Reports.Read.All` Graph API permission. If the permission is not granted, the Size column is omitted without error.
+:::
+
+## `atlas storage-check`
+
+Validate immutable backup readiness without running a backup. Reports versioning and Object Lock status.
+
+```bash
+atlas storage-check
+atlas storage-check --lock-mode governance --retention-days 30
+atlas storage-check --lock-mode compliance --retention-days 365
+```
+
+| Option                 | Description                                             |
+| ---------------------- | ------------------------------------------------------- |
+| `--lock-mode <mode>`   | Planned Object Lock mode (`governance` or `compliance`) |
+| `--retention-days <n>` | Planned retention period in days                        |
+| `-t, --tenant <id>`    | Override tenant ID                                      |
+
+## `atlas list`
+
+Browse backed-up data at three zoom levels. Subjects are hidden by default for data protection.
+
+```bash
+atlas list                              # all mailboxes with summary stats
+atlas list -m user@company.com          # all snapshots for a mailbox
+atlas list -s <snapshot-id>             # messages inside a snapshot (first 50)
+atlas list -s <snapshot-id> --all       # all messages
+atlas list -s <snapshot-id> -S          # reveal email subjects
+```
+
+| Option                  | Description                                                   |
+| ----------------------- | ------------------------------------------------------------- |
+| `-m, --mailbox <email>` | Show snapshots for this mailbox                               |
+| `-s, --snapshot <id>`   | Show messages inside this snapshot                            |
+| `--all`                 | Show all messages (default caps at 50)                        |
+| `-S, --subjects`        | Reveal email subjects (hidden by default for data protection) |
+| `-t, --tenant <id>`     | Override tenant ID                                            |
+
+## `atlas read`
+
+Decrypt and display a single backed-up message. Messages are referenced by their `#` index from `atlas list` output. Attachment metadata (name, MIME type, size) is listed below the body when present.
+
+```bash
+atlas read -s <snapshot-id> --message 34
+atlas read -s <snapshot-id> --message 34 --raw
+```
+
+| Option                | Description                                               |
+| --------------------- | --------------------------------------------------------- |
+| `-s, --snapshot <id>` | Snapshot containing the message                           |
+| `--message <ref>`     | Message `#` from `atlas list`, or full Graph message ID   |
+| `--raw`               | Output full JSON blob instead of formatted headers + body |
+| `-t, --tenant <id>`   | Override tenant ID                                        |
+
+## `atlas verify`
+
+Verify integrity of a backup snapshot. Downloads every encrypted object from S3, decrypts it (which validates the GCM authentication tag against tampering), recomputes the SHA-256 hash of the plaintext, and compares it against the checksum stored in the manifest using constant-time comparison (`timingSafeEqual`).
+
+```bash
+atlas verify -s <snapshot-id>
+```
+
+::: details What exactly is verified?
+`atlas verify` checks **message body entries** listed in the manifest. Each message is downloaded, decrypted (GCM auth tag validates ciphertext integrity), and its plaintext SHA-256 is compared against the manifest checksum.
+
+Attachments are **not separately verified** by this command. However, attachments are protected by GCM authentication -- any tampering will cause a decryption failure during restore or save operations. The verification scope is message bodies because those are the primary data objects tracked in manifests.
+:::
+
+## `atlas restore`
+
+Restore emails from backup to an M365 mailbox.
+
+**Snapshot mode** -- restore from a specific snapshot:
+
+```bash
+atlas restore -s <snapshot-id>
+atlas restore -s <snapshot-id> -f Inbox
+atlas restore -s <snapshot-id> --message 42
+atlas restore -s <snapshot-id> -m target@company.com
+```
+
+**Mailbox mode** -- aggregate all snapshots for a mailbox, deduplicate, and restore:
+
+```bash
+atlas restore -m user@company.com
+atlas restore -m user@company.com -f Inbox
+atlas restore -m user@company.com --start-date 2026-01-01
+atlas restore -m user@company.com --start-date 2026-01-01 --end-date 2026-06-30
+atlas restore -m user@company.com -T other@company.com
+atlas restore -m user@company.com -T other@company.com -f Inbox
+```
+
+| Option                      | Description                                                   |
+| --------------------------- | ------------------------------------------------------------- |
+| `-s, --snapshot <id>`       | Restore from a specific snapshot                              |
+| `-m, --mailbox <email>`     | Restore from all snapshots for this mailbox                   |
+| `-T, --target <email>`      | Target mailbox for cross-mailbox restore (defaults to source) |
+| `-f, --folder <name>`       | Restore only messages from this folder                        |
+| `--message <ref>`           | Restore a single message by `#` index from `atlas list`       |
+| `--start-date <YYYY-MM-DD>` | Include snapshots created on or after this date               |
+| `--end-date <YYYY-MM-DD>`   | Include snapshots created on or before this date              |
+| `-t, --tenant <id>`         | Override tenant ID                                            |
+
+Either `--snapshot` or `--mailbox` is required. In mailbox mode, entries are deduplicated across snapshots (newest version of each message wins). Cross-mailbox restores preserve the original folder names from the source mailbox.
+
+Restored messages retain their original received/sent timestamps, appear as received mail (not drafts), and include all backed-up attachments. Large attachments (>3 MB) use Graph upload sessions with chunked transfer.
+
+## `atlas save`
+
+Export backed-up emails as standard `.eml` files (RFC 5322) in a compressed zip archive. Messages include all backed-up attachments embedded as MIME parts. Every message and attachment is SHA-256 verified after decryption by default.
+
+**Snapshot mode:**
+
+```bash
+atlas save -s <snapshot-id>
+atlas save -s <snapshot-id> -f Inbox
+atlas save -s <snapshot-id> --message 42
+atlas save -s <snapshot-id> -o ~/Downloads/backup.zip
+atlas save -s <snapshot-id> --skip-verify
+```
+
+**Mailbox mode:**
+
+```bash
+atlas save -m user@company.com
+atlas save -m user@company.com -f Inbox
+atlas save -m user@company.com --start-date 2026-01-01
+atlas save -m user@company.com --start-date 2026-01-01 --end-date 2026-06-30
+```
+
+| Option                      | Description                                                 |
+| --------------------------- | ----------------------------------------------------------- |
+| `-s, --snapshot <id>`       | Save from a specific snapshot                               |
+| `-m, --mailbox <email>`     | Save from all snapshots for this mailbox                    |
+| `-f, --folder <name>`       | Save only messages from this folder                         |
+| `--message <ref>`           | Save a single message by `#` index from `atlas list`        |
+| `--start-date <YYYY-MM-DD>` | Include snapshots created on or after this date             |
+| `--end-date <YYYY-MM-DD>`   | Include snapshots created on or before this date            |
+| `-o, --output <path>`       | Output file path (default: `Restore-<timestamp>.zip`)       |
+| `--skip-verify`             | Skip SHA-256 integrity checks (faster on low-power systems) |
+| `-t, --tenant <id>`         | Override tenant ID                                          |
+
+The zip archive mirrors the Outlook folder hierarchy:
+
+```
+Restore-2026-03-10T14-30-00.zip
+  Inbox/
+    2026-03-10_143022_Meeting-with-client.eml
+    2026-03-10_090115_Weekly-report.eml
+  Sent Items/
+    2026-03-09_161200_Re-Project-update.eml
+  Archive/
+    2026-01-15_080000_Old-thread.eml
+```
+
+EML filenames use the format `YYYY-MM-DD_HHmmss_Sanitized-subject.eml` with timestamps from `receivedDateTime` for natural chronological sorting. Duplicate filenames within a folder get numeric suffixes (`_1`, `_2`).
+
+If the output file already exists, Atlas prompts `Overwrite? [Y/n]` before proceeding.
+
+## `atlas delete`
+
+Delete backed-up data with confirmation prompt.
+
+```bash
+atlas delete -m user@company.com        # delete all data + manifests for a mailbox
+atlas delete -s <snapshot-id>           # delete one snapshot manifest (data retained)
+atlas delete --purge                    # delete EVERYTHING in the tenant bucket
+atlas delete --purge -y                 # skip confirmation prompt
+```
+
+| Option                  | Description                                                    |
+| ----------------------- | -------------------------------------------------------------- |
+| `-m, --mailbox <email>` | Delete all data, attachments, and manifests for a mailbox      |
+| `-s, --snapshot <id>`   | Delete a single snapshot manifest (data objects retained)      |
+| `--purge`               | Delete all data, manifests, and encryption keys (irreversible) |
+| `-y, --yes`             | Skip confirmation prompt                                       |
+| `-t, --tenant <id>`     | Override tenant ID                                             |
+
+When Object Lock retention protects objects, delete commands return non-zero and report retained items separately from generic failures.
+
+::: details Deletion ordering
+Atlas deletes **manifests first**, then data objects. This ordering is safe: if deletion is interrupted mid-way, you are left with orphan data blobs (harmless, can be cleaned up later) rather than dangling manifest references that point to missing data.
+
+When using `--snapshot`, only the manifest file is removed -- the underlying data objects are retained because they may be referenced by other snapshots (content-addressed deduplication).
+
+When using `--purge`, **everything** is deleted including the encrypted DEK at `_meta/dek.enc`. This is irreversible -- all data for the tenant becomes permanently inaccessible.
+:::
+
+## `atlas stats`
+
+Show storage statistics for the entire bucket or a specific mailbox. Reports object counts and total storage size across data, attachments, and manifest prefixes.
+
+```bash
+atlas stats                            # bucket-level overview
+atlas stats -m user@company.com        # mailbox-level breakdown
+atlas stats --json                     # raw JSON output
+```
+
+| Option                  | Description                                |
+| ----------------------- | ------------------------------------------ |
+| `-m, --mailbox <email>` | Show statistics for a specific mailbox     |
+| `--json`                | Output raw JSON instead of formatted table |
+| `-t, --tenant <id>`     | Override tenant ID from config             |
+
+The bucket-level overview shows total object counts and storage consumption across all mailboxes. The mailbox breakdown shows per-prefix statistics (data, attachments, manifests) so you can identify which mailboxes consume the most storage. Use `--json` for programmatic consumption in monitoring scripts or dashboards.

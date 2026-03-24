@@ -36,6 +36,9 @@
     "lint:fix": "eslint src/ tests/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "prepublishOnly": "pnpm build",
     "prepare": "husky"
   },
@@ -53,7 +56,7 @@
     "type": "git",
     "url": "git+https://github.com/miikaok/atlas.git"
   },
-  "homepage": "https://github.com/miikaok/atlas#readme",
+  "homepage": "https://miikaok.github.io/atlas/",
   "bugs": {
     "url": "https://github.com/miikaok/atlas/issues"
   },
@@ -73,6 +76,7 @@
     "tsdown": "^0.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
+    "vitepress": "^1.6.4",
     "vitest": "^4.0.18"
   },
   "lint-staged": {
