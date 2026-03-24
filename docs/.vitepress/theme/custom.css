@@ -46,6 +46,8 @@
   --vp-code-block-bg: #0d0d18;
   --vp-code-line-highlight-color: rgba(129, 140, 248, 0.08);
   --vp-code-tab-active-bar-color: #818cf8;
+  --vp-code-line-diff-add-color: rgba(16, 185, 129, 0.14);
+  --vp-code-line-diff-remove-color: rgba(244, 63, 94, 0.14);
 
   --vp-button-brand-bg: #7c3aed;
   --vp-button-brand-hover-bg: #6d28d9;
@@ -171,6 +173,14 @@
 
 .dark .vp-doc div[class*='language-'] {
   border: 1px solid #1a1b2e;
+}
+
+.dark .vp-doc div[class*='language-'] code {
+  background-color: transparent;
+}
+
+.dark .vp-doc div[class*='language-'] code .line {
+  background-color: transparent;
 }
 
 .dark .vp-doc div[class*='language-'] span.lang {
