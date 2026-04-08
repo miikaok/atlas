@@ -45,4 +45,5 @@ export interface AtlasInstance {
   rehydrateMailbox(mailboxId: string, source: StorageTarget): Promise<ReplicationResult>;
   rehydrateTenant(source: StorageTarget): Promise<ReplicationResult>;
   getReplicationStatus(snapshotId?: string): Promise<ReplicationStatusRecord[]>;
+  getReplicationStatusByMailbox(mailboxId: string): Promise<ReplicationStatusRecord[]>;
 }

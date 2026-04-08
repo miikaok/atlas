@@ -29,6 +29,8 @@ export interface ReplicationResult {
   readonly elapsed_ms: number;
   readonly errors: string[];
   readonly verification_status: ReplicationVerificationStatus;
+  readonly source_manifest_checksum?: string;
+  readonly replicated_manifest_checksum?: string;
 }
 
 /** Durable sidecar record persisted at `_meta/replication/{mailbox}/{snapshot}/{target}.json`. */

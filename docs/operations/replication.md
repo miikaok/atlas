@@ -31,7 +31,7 @@ Replication is **idempotent**. Running it again for the same snapshot skips all 
 ## Primary-Is-Truth Principle
 
 ::: danger Primary Is Authoritative
-Primary storage is always the source of truth during normal operation. Secondary targets receive data only through replication. Never run `atlas backup` directly against a replica target -- Atlas writes a marker file on targets and warns if this is attempted.
+Primary storage is always the source of truth during normal operation. Secondary targets receive data only through replication. Never run `atlas backup` directly against a replica target -- Atlas detects the replica marker file and logs a warning if this is attempted.
 :::
 
 Replication is one-directional: primary to target. There is no bidirectional sync and no automatic conflict resolution. If you need to recover data from a secondary target (disaster recovery), use `atlas rehydrate` -- a separate, explicit operation described below.
@@ -63,10 +63,11 @@ This prevents silent data corruption where old objects on the target become perm
 
 Objects are always copied in this order:
 
-1. `_meta/dek.enc` (with mismatch validation)
-2. Data objects (`data/{mailbox}/{sha256}`)
-3. Attachment objects (`attachments/{mailbox}/{sha256}`)
-4. Manifest file (`manifests/{mailbox}/{snapshot_id}.json`) -- **always last**
+1. **DEK validation** -- verifies source and target share the same encryption key
+2. `_meta/dek.enc` -- copied to target if not already present
+3. `_meta/replica.marker` -- written on target (skipped during rehydration to primary)
+4. Data and attachment objects -- copied in manifest order, skipping objects already on target
+5. Manifest file (`manifests/{mailbox}/{snapshot_id}.json`) -- **always last**
 
 If replication crashes at any point, the target is left in a safe state: orphan data blobs exist (harmless, reclaimable), but no manifest ever references missing objects. Rerunning replication picks up where it left off.
 

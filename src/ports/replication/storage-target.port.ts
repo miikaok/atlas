@@ -15,3 +15,6 @@ export interface StorageTarget {
   /** Creates a tenant-scoped storage + crypto context on this target. */
   create_context(tenant_id: string): Promise<TenantContext>;
 }
+
+/** Creates a StorageTarget from configuration. */
+export type StorageTargetFactory = (config: StorageTargetConfig) => StorageTarget;

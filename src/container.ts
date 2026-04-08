@@ -6,6 +6,8 @@ import {
   TENANT_CONTEXT_FACTORY_TOKEN,
   RESTORE_CONNECTOR_TOKEN,
   MAILBOX_DISCOVERY_TOKEN,
+  DEK_VALIDATION_FN_TOKEN,
+  STORAGE_TARGET_FACTORY_TOKEN,
 } from '@/ports/tokens/outgoing.tokens';
 import {
   BACKUP_USE_CASE_TOKEN,
@@ -38,6 +40,8 @@ import { DefaultTenantBackupOrchestrator } from '@/services/backup/tenant-backup
 import { MailboxStatusService } from '@/services/status/mailbox-status.service';
 import { ReplicationService } from '@/services/replication/replication.service';
 import { GraphMailboxDiscoveryAdapter } from '@/adapters/m365/graph-mailbox-discovery.adapter';
+import { validate_dek_match } from '@/adapters/storage-s3/dek-validator';
+import { create_storage_target } from '@/adapters/storage-target.factory';
 import type { AtlasConfig } from '@/utils/config';
 import { load_config, ATLAS_CONFIG_TOKEN } from '@/utils/config';
 
@@ -80,6 +84,8 @@ function bind_adapters(container: Container): void {
   container.bind(TENANT_CONTEXT_FACTORY_TOKEN).to(DefaultTenantContextFactory).inSingletonScope();
   container.bind(MANIFEST_REPOSITORY_TOKEN).to(S3ManifestRepository).inSingletonScope();
   container.bind(MAILBOX_DISCOVERY_TOKEN).to(GraphMailboxDiscoveryAdapter).inSingletonScope();
+  container.bind(DEK_VALIDATION_FN_TOKEN).toConstantValue(validate_dek_match);
+  container.bind(STORAGE_TARGET_FACTORY_TOKEN).toConstantValue(create_storage_target);
 }
 
 /** Binds service classes so Inversify can auto-resolve their constructor dependencies. */

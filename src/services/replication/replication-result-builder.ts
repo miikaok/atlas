@@ -10,6 +10,8 @@ export interface RawCopyResult {
   readonly objects_failed: number;
   readonly bytes_copied: number;
   readonly errors: string[];
+  readonly source_manifest_checksum?: string;
+  readonly replicated_manifest_checksum?: string;
 }
 
 export function build_replication_result(
@@ -37,6 +39,8 @@ export function build_replication_result(
     elapsed_ms,
     errors: raw.errors,
     verification_status: ReplicationVerificationStatus.SKIPPED,
+    source_manifest_checksum: raw.source_manifest_checksum,
+    replicated_manifest_checksum: raw.replicated_manifest_checksum,
   };
 }
 
@@ -77,7 +81,7 @@ export function to_status_record(
     bytes_copied: result.bytes_copied,
     last_error: result.errors.length > 0 ? result.errors[result.errors.length - 1] : undefined,
     verification_status: result.verification_status,
-    source_manifest_checksum: '',
-    replicated_manifest_checksum: '',
+    source_manifest_checksum: result.source_manifest_checksum ?? '',
+    replicated_manifest_checksum: result.replicated_manifest_checksum ?? '',
   };
 }

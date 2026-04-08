@@ -2,12 +2,15 @@ import { inject, injectable } from 'inversify';
 import type { TenantContextFactory, TenantContext } from '@/ports/tenant/context.port';
 import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
 import type { ReplicationUseCase } from '@/ports/replication/use-case.port';
-import type { StorageTarget } from '@/ports/replication/storage-target.port';
+import type { StorageTarget, StorageTargetFactory } from '@/ports/replication/storage-target.port';
+import type { DekValidationFn } from '@/ports/replication/dek-validation.port';
 import type { ReplicationResult, ReplicationStatusRecord } from '@/domain/replication';
 import type { Manifest } from '@/domain/manifest';
 import {
   TENANT_CONTEXT_FACTORY_TOKEN,
   MANIFEST_REPOSITORY_TOKEN,
+  DEK_VALIDATION_FN_TOKEN,
+  STORAGE_TARGET_FACTORY_TOKEN,
 } from '@/ports/tokens/outgoing.tokens';
 import { replicate_snapshot_to_target } from '@/services/replication/snapshot-replicator';
 import {
@@ -31,6 +34,8 @@ export class ReplicationService implements ReplicationUseCase {
     @inject(TENANT_CONTEXT_FACTORY_TOKEN) private readonly _tenant_factory: TenantContextFactory,
     @inject(MANIFEST_REPOSITORY_TOKEN) private readonly _manifests: ManifestRepository,
     @inject(ATLAS_CONFIG_TOKEN) private readonly _config: AtlasConfig,
+    @inject(DEK_VALIDATION_FN_TOKEN) private readonly _validate_dek: DekValidationFn,
+    @inject(STORAGE_TARGET_FACTORY_TOKEN) private readonly _target_factory: StorageTargetFactory,
   ) {}
 
   async replicate_snapshot(
@@ -79,7 +84,7 @@ export class ReplicationService implements ReplicationUseCase {
     snapshot_id: string,
     source: StorageTarget,
   ): Promise<ReplicationResult> {
-    await ensure_source_dek_on_primary(this._config, source, tenant_id);
+    await ensure_source_dek_on_primary(this.create_primary_target(), source, tenant_id);
     const primary_ctx = await this._tenant_factory.create(tenant_id);
     const source_ctx = await source.create_context(tenant_id);
     const manifest = await this.require_manifest_from_ctx(source_ctx, snapshot_id);
@@ -89,7 +94,7 @@ export class ReplicationService implements ReplicationUseCase {
       return build_skip_result(snapshot_id, source.target_id);
     }
 
-    return this.copy_between(source_ctx, primary_ctx, manifest, source.target_id, tenant_id);
+    return this.copy_between(source_ctx, primary_ctx, manifest, source.target_id, tenant_id, true);
   }
 
   async rehydrate_mailbox(
@@ -97,7 +102,7 @@ export class ReplicationService implements ReplicationUseCase {
     mailbox_id: string,
     source: StorageTarget,
   ): Promise<ReplicationResult> {
-    await ensure_source_dek_on_primary(this._config, source, tenant_id);
+    await ensure_source_dek_on_primary(this.create_primary_target(), source, tenant_id);
     const primary_ctx = await this._tenant_factory.create(tenant_id);
     const source_ctx = await source.create_context(tenant_id);
     const manifests = await this.list_mailbox_manifests(source_ctx, mailbox_id);
@@ -106,7 +111,7 @@ export class ReplicationService implements ReplicationUseCase {
   }
 
   async rehydrate_tenant(tenant_id: string, source: StorageTarget): Promise<ReplicationResult> {
-    await ensure_source_dek_on_primary(this._config, source, tenant_id);
+    await ensure_source_dek_on_primary(this.create_primary_target(), source, tenant_id);
     const primary_ctx = await this._tenant_factory.create(tenant_id);
     const source_ctx = await source.create_context(tenant_id);
     const all_manifests = await this._manifests.list_all_manifests(source_ctx);
@@ -139,13 +144,13 @@ export class ReplicationService implements ReplicationUseCase {
   ): Promise<ReplicationResult> {
     const start = Date.now();
     const target_ctx = await target.create_context(tenant_id);
-    const rep = await replicate_snapshot_to_target(
-      source_ctx,
-      target_ctx,
-      manifest,
+    await this._validate_dek(
+      source_ctx.storage,
+      target_ctx.storage,
       this._config.encryption_passphrase,
       tenant_id,
     );
+    const rep = await replicate_snapshot_to_target(source_ctx, target_ctx, manifest);
     return build_replication_result(
       rep,
       manifest.snapshot_id,
@@ -160,15 +165,18 @@ export class ReplicationService implements ReplicationUseCase {
     manifest: Manifest,
     target_id: string,
     tenant_id: string,
+    is_rehydration = false,
   ): Promise<ReplicationResult> {
     const start = Date.now();
-    const rep = await replicate_snapshot_to_target(
-      source_ctx,
-      target_ctx,
-      manifest,
+    await this._validate_dek(
+      source_ctx.storage,
+      target_ctx.storage,
       this._config.encryption_passphrase,
       tenant_id,
     );
+    const rep = await replicate_snapshot_to_target(source_ctx, target_ctx, manifest, {
+      skip_marker: is_rehydration,
+    });
     return build_replication_result(rep, manifest.snapshot_id, target_id, Date.now() - start);
   }
 
@@ -180,6 +188,13 @@ export class ReplicationService implements ReplicationUseCase {
     tenant_id: string,
   ): Promise<ReplicationResult> {
     const start = Date.now();
+    await this._validate_dek(
+      source_ctx.storage,
+      primary_ctx.storage,
+      this._config.encryption_passphrase,
+      tenant_id,
+    );
+
     let total_copied = 0;
     let total_skipped = 0;
     let total_failed = 0;
@@ -194,13 +209,9 @@ export class ReplicationService implements ReplicationUseCase {
         continue;
       }
 
-      const rep = await replicate_snapshot_to_target(
-        source_ctx,
-        primary_ctx,
-        manifest,
-        this._config.encryption_passphrase,
-        tenant_id,
-      );
+      const rep = await replicate_snapshot_to_target(source_ctx, primary_ctx, manifest, {
+        skip_marker: true,
+      });
 
       total_copied += rep.objects_copied;
       total_skipped += rep.objects_skipped;
@@ -262,5 +273,15 @@ export class ReplicationService implements ReplicationUseCase {
       target_keys.map((k) => k.split('/').pop()?.replace('.json', '')).filter(Boolean) as string[],
     );
     return source_manifests.filter((m) => !target_snapshot_ids.has(m.snapshot_id));
+  }
+
+  private create_primary_target(): StorageTarget {
+    return this._target_factory({
+      s3_endpoint: this._config.s3_endpoint,
+      s3_access_key: this._config.s3_access_key,
+      s3_secret_key: this._config.s3_secret_key,
+      s3_region: this._config.s3_region,
+      encryption_passphrase: this._config.encryption_passphrase,
+    });
   }
 }

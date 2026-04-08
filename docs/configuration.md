@@ -63,7 +63,7 @@ Never commit these files to version control. The included `.gitignore` already e
 
 ## Replication Target Config
 
-The `atlas replicate` and `atlas rehydrate` commands accept a `--target-config` or `--source-config` flag pointing to a JSON file with S3 credentials for a secondary storage target:
+The `atlas replicate` command accepts `--target-config` and the `atlas rehydrate` command accepts `--source-config`, both pointing to a JSON file with S3 credentials for a secondary storage target:
 
 ```json
 {

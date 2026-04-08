@@ -5,12 +5,9 @@ import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context
 import type { ManifestRepository } from '@/ports/storage/manifest-repository.port';
 import type { ObjectStorage } from '@/ports/storage/object-storage.port';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
-import type { StorageTarget } from '@/ports/replication/storage-target.port';
+import type { StorageTarget, StorageTargetFactory } from '@/ports/replication/storage-target.port';
+import type { DekValidationFn } from '@/ports/replication/dek-validation.port';
 import type { AtlasConfig } from '@/utils/config';
-
-vi.mock('@/adapters/storage-s3/dek-validator', () => ({
-  validate_dek_match: vi.fn().mockResolvedValue(undefined),
-}));
 
 vi.mock('@/services/replication/rehydration-dek-helper', () => ({
   ensure_source_dek_on_primary: vi.fn().mockResolvedValue(undefined),
@@ -65,6 +62,8 @@ describe('ReplicationService', () => {
   let manifests: ManifestRepository;
   let config: AtlasConfig;
   let target: StorageTarget;
+  let validate_dek: DekValidationFn;
+  let target_factory: StorageTargetFactory;
   let service: ReplicationService;
 
   beforeEach(() => {
@@ -111,7 +110,15 @@ describe('ReplicationService', () => {
       create_context: vi.fn().mockResolvedValue(target_ctx),
     };
 
-    service = new ReplicationService(tenant_factory, manifests, config);
+    validate_dek = vi.fn().mockResolvedValue(undefined) as unknown as DekValidationFn;
+    target_factory = vi.fn().mockReturnValue(target) as unknown as StorageTargetFactory;
+    service = new ReplicationService(
+      tenant_factory,
+      manifests,
+      config,
+      validate_dek,
+      target_factory,
+    );
   });
 
   it('replicates a single snapshot to a target', async () => {

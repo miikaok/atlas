@@ -318,7 +318,6 @@ atlas replicate -s <snapshot-id> \
   --target-secret-key <secret>
 
 atlas replicate -m user@company.com --target-config ./offsite.json
-atlas replicate -s <snapshot-id> --target-config ./offsite.json --verify
 
 atlas replicate --status
 atlas replicate --status -m user@company.com
@@ -334,7 +333,6 @@ atlas replicate --status -s <snapshot-id>
 | `--target-secret-key <key>`  | Target S3 secret key                                  |
 | `--target-region <region>`   | Target S3 region (default: `us-east-1`)               |
 | `--target-config <path>`     | Path to JSON file with target S3 credentials          |
-| `--verify`                   | Verify integrity on target after replication          |
 | `--status`                   | Show replication status instead of replicating        |
 | `-t, --tenant <id>`          | Override tenant ID                                    |
 

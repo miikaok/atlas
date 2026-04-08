@@ -7,10 +7,6 @@ import type { Manifest, ManifestEntry, AttachmentEntry } from '@/domain/manifest
 import type { TenantContext } from '@/ports/tenant/context.port';
 import type { ObjectStorage } from '@/ports/storage/object-storage.port';
 
-vi.mock('@/adapters/storage-s3/dek-validator', () => ({
-  validate_dek_match: vi.fn().mockResolvedValue(undefined),
-}));
-
 function make_storage(): ObjectStorage {
   return {
     put: vi.fn(),
@@ -117,13 +113,7 @@ describe('replicate_snapshot_to_target', () => {
     });
     vi.mocked(target_storage.get).mockResolvedValue(manifest_blob);
 
-    const result = await replicate_snapshot_to_target(
-      source_ctx,
-      target_ctx,
-      manifest,
-      'pass',
-      'tenant-1',
-    );
+    const result = await replicate_snapshot_to_target(source_ctx, target_ctx, manifest);
 
     expect(result.objects_copied).toBe(1);
     expect(result.objects_skipped).toBe(0);
@@ -147,13 +137,7 @@ describe('replicate_snapshot_to_target', () => {
     vi.mocked(source_storage.get).mockResolvedValue(manifest_blob);
     vi.mocked(target_storage.get).mockResolvedValue(manifest_blob);
 
-    const result = await replicate_snapshot_to_target(
-      source_ctx,
-      target_ctx,
-      manifest,
-      'pass',
-      'tenant-1',
-    );
+    const result = await replicate_snapshot_to_target(source_ctx, target_ctx, manifest);
 
     expect(result.objects_copied).toBe(0);
     expect(result.objects_skipped).toBe(1);
@@ -171,7 +155,7 @@ describe('replicate_snapshot_to_target', () => {
     });
     vi.mocked(target_storage.get).mockResolvedValue(manifest_blob);
 
-    await replicate_snapshot_to_target(source_ctx, target_ctx, manifest, 'pass', 'tenant-1');
+    await replicate_snapshot_to_target(source_ctx, target_ctx, manifest);
 
     expect(target_storage.put).toHaveBeenCalledWith('_meta/dek.enc', dek_blob);
     expect(target_storage.put).toHaveBeenCalledWith('_meta/replica.marker', expect.any(Buffer));
@@ -192,13 +176,7 @@ describe('replicate_snapshot_to_target', () => {
     });
     vi.mocked(target_storage.get).mockResolvedValue(manifest_blob);
 
-    const result = await replicate_snapshot_to_target(
-      source_ctx,
-      target_ctx,
-      manifest,
-      'pass',
-      'tenant-1',
-    );
+    const result = await replicate_snapshot_to_target(source_ctx, target_ctx, manifest);
 
     expect(result.objects_failed).toBe(1);
     expect(result.errors).toHaveLength(1);

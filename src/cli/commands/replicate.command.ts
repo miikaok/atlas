@@ -23,7 +23,6 @@ interface ReplicateOptions {
   targetSecretKey?: string;
   targetRegion?: string;
   targetConfig?: string;
-  verify?: boolean;
   status?: boolean;
 }
 
@@ -43,7 +42,6 @@ export function register_replicate_command(
     .option('--target-secret-key <key>', 'target S3 secret key')
     .option('--target-region <region>', 'target S3 region')
     .option('--target-config <path>', 'path to JSON file with target S3 credentials')
-    .option('--verify', 'verify integrity on target after replication')
     .option('--status', 'show replication status instead of replicating')
     .action((options: ReplicateOptions) => execute_replicate(get_container(), options));
 }

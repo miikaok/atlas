@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import type { TenantContext } from '@/ports/tenant/context.port';
 import type { Manifest } from '@/domain/manifest';
 import type { ReplicationObjectResult } from '@/domain/replication';
-import { validate_dek_match } from '@/adapters/storage-s3/dek-validator';
 
 const DEK_META_KEY = '_meta/dek.enc';
 const REPLICA_MARKER_KEY = '_meta/replica.marker';
@@ -32,25 +31,26 @@ export function collect_storage_keys(manifest: Manifest): string[] {
   return keys;
 }
 
+export interface ReplicateOptions {
+  readonly skip_marker?: boolean;
+}
+
 /**
  * Replicates a single snapshot from source to target.
+ * Callers must validate DEK match before invoking.
  *
- * Ordering guarantees:
- *   1. DEK validation + copy
- *   2. Replica marker
- *   3. Data + attachment objects
- *   4. Manifest (always last)
+ * Order: DEK copy -> replica marker -> data+attachments -> manifest (always last).
  */
 export async function replicate_snapshot_to_target(
   source_ctx: TenantContext,
   target_ctx: TenantContext,
   manifest: Manifest,
-  passphrase: string,
-  tenant_id: string,
+  options: ReplicateOptions = {},
 ): Promise<SnapshotReplicationResult> {
-  await validate_dek_match(source_ctx.storage, target_ctx.storage, passphrase, tenant_id);
   await ensure_dek_on_target(source_ctx, target_ctx);
-  await ensure_replica_marker(target_ctx, source_ctx.tenant_id);
+  if (!options.skip_marker) {
+    await ensure_replica_marker(target_ctx, source_ctx.tenant_id);
+  }
 
   const storage_keys = collect_storage_keys(manifest);
   const object_results: ReplicationObjectResult[] = [];
