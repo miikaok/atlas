@@ -51,6 +51,11 @@ jobs:
       - name: Test
         run: pnpm run test
 
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+        env:
+          NODE_AUTH_TOKEN: ''
+
       - name: Publish to npm (Trusted Publishing via OIDC)
         run: npm publish --provenance --access public
 
