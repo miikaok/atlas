@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync } from 'node:crypto';
+import { logger } from '@/utils/logger';
 
 /** KDF identifier for scrypt (versioned DEK blob v1). */
 export const KDF_SCRYPT = 0x01;
@@ -11,6 +12,9 @@ const SCRYPT_P = 1;
 
 /** OpenSSL default maxmem (32 MiB) is too small for N=65536, r=8 (~64 MiB required). */
 const SCRYPT_MAXMEM = 128 * 1024 * 1024;
+/** OWASP minimum for sensitive workloads (2^14). */
+const SCRYPT_N_MIN = 1 << 14;
+const MIN_PASSPHRASE_LENGTH = 14;
 /** Upper bound for N to prevent a crafted blob from allocating unbounded memory. */
 const SCRYPT_N_MAX = 1 << 20;
 
@@ -23,9 +27,9 @@ export const SCRYPT_PARAMS_LENGTH = 38;
  */
 export interface KdfStrategy {
   readonly kdf_id: number;
-  derive_kek(passphrase: string, params: Buffer): Buffer;
-  /** Produces a fresh params block for `wrap_dek` (includes random salt). */
-  generate_params(): Buffer;
+  derive_kek(passphrase: Buffer, params: Buffer, tenant_id: string): Buffer;
+  /** Produces a fresh params block for `wrap_dek` (includes random salt). Warns if passphrase is too short for this KDF. */
+  generate_params(passphrase_length: number): Buffer;
 }
 
 /** scrypt-based KEK derivation with per-wrap random salt stored in the blob. */
@@ -33,7 +37,7 @@ export class ScryptKdfStrategy implements KdfStrategy {
   readonly kdf_id = KDF_SCRYPT;
 
   /** @inheritdoc */
-  derive_kek(passphrase: string, params: Buffer): Buffer {
+  derive_kek(passphrase: Buffer, params: Buffer, tenant_id: string): Buffer {
     if (params.length !== SCRYPT_PARAMS_LENGTH) {
       throw new Error(
         `Invalid scrypt params length: expected ${SCRYPT_PARAMS_LENGTH}, got ${params.length}`,
@@ -44,11 +48,19 @@ export class ScryptKdfStrategy implements KdfStrategy {
     const p = params.readUInt8(5);
     validate_scrypt_params(N, r, p);
     const salt = params.subarray(6, SCRYPT_PARAMS_LENGTH);
-    return scryptSync(passphrase, salt, KEY_LENGTH, { N, r, p, maxmem: SCRYPT_MAXMEM });
+    const effective_salt = build_domain_salt(tenant_id, salt);
+    return scryptSync(passphrase, effective_salt, KEY_LENGTH, { N, r, p, maxmem: SCRYPT_MAXMEM });
   }
 
   /** @inheritdoc */
-  generate_params(): Buffer {
+  generate_params(passphrase_length: number): Buffer {
+    if (passphrase_length < MIN_PASSPHRASE_LENGTH) {
+      logger.warn(
+        `Encryption passphrase is shorter than ${MIN_PASSPHRASE_LENGTH} characters. ` +
+          'With scrypt (N=65536), short passphrases are vulnerable to brute-force. ' +
+          'Use at least 5 random words or 20+ random characters for production.',
+      );
+    }
     const salt = randomBytes(32);
     const buf = Buffer.alloc(SCRYPT_PARAMS_LENGTH);
     buf.writeUInt32BE(SCRYPT_N, 0);
@@ -59,10 +71,21 @@ export class ScryptKdfStrategy implements KdfStrategy {
   }
 }
 
+/** Length-prefixed domain separator: `[len BE 2][tenant_id UTF-8][random_salt]`. */
+function build_domain_salt(tenant_id: string, random_salt: Buffer): Buffer {
+  const tid = Buffer.from(tenant_id, 'utf-8');
+  const prefix = Buffer.alloc(2);
+  prefix.writeUInt16BE(tid.length, 0);
+  return Buffer.concat([prefix, tid, random_salt]);
+}
+
 /** Rejects params that would cause excessive memory use or are clearly invalid. */
 function validate_scrypt_params(cost_n: number, block_r: number, parallel_p: number): void {
   if (cost_n === 0 || (cost_n & (cost_n - 1)) !== 0) {
     throw new Error(`scrypt N must be a power of 2, got ${cost_n}`);
+  }
+  if (cost_n < SCRYPT_N_MIN) {
+    throw new Error(`scrypt N below minimum (${cost_n} < ${SCRYPT_N_MIN})`);
   }
   if (cost_n > SCRYPT_N_MAX) {
     throw new Error(`scrypt N exceeds maximum (${cost_n} > ${SCRYPT_N_MAX})`);

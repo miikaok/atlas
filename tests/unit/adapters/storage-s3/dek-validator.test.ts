@@ -18,6 +18,7 @@ function make_storage(): ObjectStorage {
 
 describe('validate_dek_match', () => {
   const passphrase = 'test-passphrase';
+  const tenant_id = 'tenant-1';
   let source_storage: ObjectStorage;
   let target_storage: ObjectStorage;
 
@@ -30,7 +31,7 @@ describe('validate_dek_match', () => {
     vi.mocked(target_storage.exists).mockResolvedValue(false);
 
     await expect(
-      validate_dek_match(source_storage, target_storage, passphrase),
+      validate_dek_match(source_storage, target_storage, passphrase, tenant_id),
     ).resolves.toBeUndefined();
 
     expect(source_storage.get).not.toHaveBeenCalled();
@@ -39,14 +40,14 @@ describe('validate_dek_match', () => {
   it('passes when both sides have the same DEK', async () => {
     const key_service = new EnvelopeKeyService(passphrase);
     const dek = key_service.generate_dek();
-    const wrapped = key_service.wrap_dek(dek);
+    const wrapped = key_service.wrap_dek(dek, tenant_id);
 
     vi.mocked(target_storage.exists).mockResolvedValue(true);
     vi.mocked(source_storage.get).mockResolvedValue(wrapped);
     vi.mocked(target_storage.get).mockResolvedValue(wrapped);
 
     await expect(
-      validate_dek_match(source_storage, target_storage, passphrase),
+      validate_dek_match(source_storage, target_storage, passphrase, tenant_id),
     ).resolves.toBeUndefined();
   });
 
@@ -54,15 +55,15 @@ describe('validate_dek_match', () => {
     const key_service = new EnvelopeKeyService(passphrase);
     const dek_a = key_service.generate_dek();
     const dek_b = key_service.generate_dek();
-    const wrapped_a = key_service.wrap_dek(dek_a);
-    const wrapped_b = key_service.wrap_dek(dek_b);
+    const wrapped_a = key_service.wrap_dek(dek_a, tenant_id);
+    const wrapped_b = key_service.wrap_dek(dek_b, tenant_id);
 
     vi.mocked(target_storage.exists).mockResolvedValue(true);
     vi.mocked(source_storage.get).mockResolvedValue(wrapped_a);
     vi.mocked(target_storage.get).mockResolvedValue(wrapped_b);
 
-    await expect(validate_dek_match(source_storage, target_storage, passphrase)).rejects.toThrow(
-      DekMismatchError,
-    );
+    await expect(
+      validate_dek_match(source_storage, target_storage, passphrase, tenant_id),
+    ).rejects.toThrow(DekMismatchError);
   });
 });

@@ -8,4 +8,5 @@ export type DekValidationFn = (
   source_storage: ObjectStorage,
   target_storage: ObjectStorage,
   passphrase: string,
+  tenant_id: string,
 ) => Promise<void>;

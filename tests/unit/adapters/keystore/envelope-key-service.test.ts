@@ -5,6 +5,7 @@ import { DEK_BLOB_VERSION, parse_dek_blob } from '@/adapters/keystore/dek-blob-c
 
 describe('EnvelopeKeyService', () => {
   const passphrase = 'test-passphrase';
+  const tenant_id = 'tenant-1';
 
   describe('encrypt / decrypt round-trip', () => {
     it('round-trips arbitrary data', () => {
@@ -59,29 +60,29 @@ describe('EnvelopeKeyService', () => {
       const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
 
-      const wrapped = svc.wrap_dek(dek);
-      const unwrapped = svc.unwrap_dek(wrapped);
+      const wrapped = svc.wrap_dek(dek, tenant_id);
+      const unwrapped = svc.unwrap_dek(wrapped, tenant_id);
       expect(unwrapped.equals(dek)).toBe(true);
     });
 
     it('produces v1 blob with version and scrypt kdf id', () => {
       const svc = new EnvelopeKeyService(passphrase);
-      const wrapped = svc.wrap_dek(svc.generate_dek());
+      const wrapped = svc.wrap_dek(svc.generate_dek(), tenant_id);
       expect(wrapped[0]).toBe(DEK_BLOB_VERSION);
       expect(wrapped[1]).toBe(KDF_SCRYPT);
     });
 
     it('wrapped blob is 102 bytes for a 256-bit DEK', () => {
       const svc = new EnvelopeKeyService(passphrase);
-      const wrapped = svc.wrap_dek(svc.generate_dek());
+      const wrapped = svc.wrap_dek(svc.generate_dek(), tenant_id);
       expect(wrapped.length).toBe(102);
     });
 
     it('uses different salts on successive wraps', () => {
       const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
-      const w1 = svc.wrap_dek(dek);
-      const w2 = svc.wrap_dek(dek);
+      const w1 = svc.wrap_dek(dek, tenant_id);
+      const w2 = svc.wrap_dek(dek, tenant_id);
       const p1 = parse_dek_blob(w1).header.kdf_params.subarray(6);
       const p2 = parse_dek_blob(w2).header.kdf_params.subarray(6);
       expect(p1.equals(p2)).toBe(false);
@@ -90,7 +91,7 @@ describe('EnvelopeKeyService', () => {
     it('wrapped DEK does not contain the plaintext DEK', () => {
       const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
-      const wrapped = svc.wrap_dek(dek);
+      const wrapped = svc.wrap_dek(dek, tenant_id);
 
       expect(wrapped.includes(dek)).toBe(false);
     });
@@ -100,15 +101,44 @@ describe('EnvelopeKeyService', () => {
       const svc_b = new EnvelopeKeyService('other-passphrase');
       const dek = svc_a.generate_dek();
 
-      const wrapped = svc_a.wrap_dek(dek);
-      expect(() => svc_b.unwrap_dek(wrapped)).toThrow();
+      const wrapped = svc_a.wrap_dek(dek, tenant_id);
+      expect(() => svc_b.unwrap_dek(wrapped, tenant_id)).toThrow();
     });
 
     it('throws on unknown KDF id in blob', () => {
       const svc = new EnvelopeKeyService(passphrase);
-      const wrapped = svc.wrap_dek(svc.generate_dek());
+      const wrapped = svc.wrap_dek(svc.generate_dek(), tenant_id);
       wrapped[1] = 0xff;
-      expect(() => svc.unwrap_dek(wrapped)).toThrow('Unknown KDF id');
+      expect(() => svc.unwrap_dek(wrapped, tenant_id)).toThrow('Unknown KDF id');
+    });
+
+    it('rejects tampered blob header (AAD protects header)', () => {
+      const svc = new EnvelopeKeyService(passphrase);
+      const dek = svc.generate_dek();
+      const wrapped = svc.wrap_dek(dek, tenant_id);
+
+      const { header } = parse_dek_blob(wrapped);
+      header.kdf_params[0] ^= 0x01;
+      expect(() => svc.unwrap_dek(wrapped, tenant_id)).toThrow();
+    });
+
+    it('cannot unwrap with wrong tenant_id (cross-tenant isolation)', () => {
+      const svc = new EnvelopeKeyService(passphrase);
+      const dek = svc.generate_dek();
+      const wrapped = svc.wrap_dek(dek, 'tenant-a');
+
+      expect(() => svc.unwrap_dek(wrapped, 'tenant-b')).toThrow();
+    });
+  });
+
+  describe('destroy', () => {
+    it('zeros the passphrase buffer', () => {
+      const svc = new EnvelopeKeyService(passphrase);
+      const dek = svc.generate_dek();
+      const wrapped = svc.wrap_dek(dek, tenant_id);
+
+      svc.destroy();
+      expect(() => svc.unwrap_dek(wrapped, tenant_id)).toThrow();
     });
   });
 

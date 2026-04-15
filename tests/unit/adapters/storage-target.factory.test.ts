@@ -5,7 +5,7 @@ import type { StorageTargetConfig } from '@/ports/replication/storage-target.por
 
 const ks = new EnvelopeKeyService('test-pass');
 const dek = ks.generate_dek();
-const wrapped_dek = ks.wrap_dek(dek);
+const wrapped_dek = ks.wrap_dek(dek, 'tenant-1');
 
 let mock_exists_returns = true;
 vi.mock('@/adapters/storage-s3/s3-object-storage.adapter', () => ({

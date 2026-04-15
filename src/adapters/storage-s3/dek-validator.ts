@@ -23,6 +23,7 @@ export async function validate_dek_match(
   source_storage: ObjectStorage,
   target_storage: ObjectStorage,
   passphrase: string,
+  tenant_id: string,
 ): Promise<void> {
   const target_has_dek = await target_storage.exists(DEK_META_KEY);
   if (!target_has_dek) return;
@@ -31,8 +32,9 @@ export async function validate_dek_match(
   const target_wrapped = await target_storage.get(DEK_META_KEY);
 
   const key_service = new EnvelopeKeyService(passphrase);
-  const source_dek = key_service.unwrap_dek(source_wrapped);
-  const target_dek = key_service.unwrap_dek(target_wrapped);
+  const source_dek = key_service.unwrap_dek(source_wrapped, tenant_id);
+  const target_dek = key_service.unwrap_dek(target_wrapped, tenant_id);
+  key_service.destroy();
 
   if (source_dek.length !== target_dek.length || !timingSafeEqual(source_dek, target_dek)) {
     throw new DekMismatchError();

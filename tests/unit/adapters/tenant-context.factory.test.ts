@@ -66,7 +66,7 @@ describe('DefaultTenantContextFactory', () => {
     mock_exists = true;
     const ks = new EnvelopeKeyService(config.encryption_passphrase);
     const dek = ks.generate_dek();
-    mock_get.mockResolvedValue(ks.wrap_dek(dek));
+    mock_get.mockResolvedValue(ks.wrap_dek(dek, 'tenant-c'));
 
     const factory = container.get(DefaultTenantContextFactory);
     const ctx = await factory.create('tenant-c');

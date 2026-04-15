@@ -86,7 +86,8 @@ class DefaultStorageTarget implements StorageTarget {
 
     const storage = new S3ObjectStorage(this._client, bucket);
     const key_service = new EnvelopeKeyService(this._passphrase);
-    const dek = await this.try_load_dek(storage, key_service);
+    const dek = await this.try_load_dek(storage, key_service, tenant_id);
+    key_service.destroy();
 
     if (dek) {
       return {
@@ -112,10 +113,11 @@ class DefaultStorageTarget implements StorageTarget {
   private async try_load_dek(
     storage: S3ObjectStorage,
     key_service: EnvelopeKeyService,
+    tenant_id: string,
   ): Promise<Buffer | undefined> {
     const exists = await storage.exists(DEK_META_KEY);
     if (!exists) return undefined;
     const wrapped = await storage.get(DEK_META_KEY);
-    return key_service.unwrap_dek(wrapped);
+    return key_service.unwrap_dek(wrapped, tenant_id);
   }
 }

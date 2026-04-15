@@ -44,6 +44,7 @@ export class DefaultTenantContextFactory implements TenantContextFactory {
 
     const key_service = new EnvelopeKeyService(this._config.encryption_passphrase);
     const dek = await this.load_or_create_dek(storage, key_service, tenant_id);
+    key_service.destroy();
 
     return {
       tenant_id,
@@ -67,12 +68,12 @@ export class DefaultTenantContextFactory implements TenantContextFactory {
 
     if (dek_exists) {
       const wrapped = await storage.get(DEK_META_KEY);
-      return key_service.unwrap_dek(wrapped);
+      return key_service.unwrap_dek(wrapped, tenant_id);
     }
 
     logger.info(`Generating new encryption key for tenant ${tenant_id}`);
     const dek = key_service.generate_dek();
-    const wrapped = key_service.wrap_dek(dek);
+    const wrapped = key_service.wrap_dek(dek, tenant_id);
     await storage.put(DEK_META_KEY, wrapped);
     return dek;
   }

@@ -11,11 +11,8 @@ export interface DekBlobHeader {
   readonly kdf_params: Buffer;
 }
 
-/**
- * Serializes `[version][kdf_id][params_len BE][params][encrypted_dek]`.
- * `encrypted_dek` is typically `[IV][tag][ciphertext]` from AES-256-GCM.
- */
-export function serialize_dek_blob(header: DekBlobHeader, encrypted_dek: Buffer): Buffer {
+/** Builds the binary header prefix: `[version][kdf_id][params_len BE][params]`. */
+export function build_header_bytes(header: DekBlobHeader): Buffer {
   const params_len = header.kdf_params.length;
   if (params_len > 0xffff) {
     throw new Error('KDF params block too large');
@@ -26,14 +23,25 @@ export function serialize_dek_blob(header: DekBlobHeader, encrypted_dek: Buffer)
     Buffer.from([DEK_BLOB_VERSION, header.kdf_id]),
     len_buf,
     header.kdf_params,
-    encrypted_dek,
   ]);
 }
 
 /**
- * Parses a v1 blob. Throws if version is not `DEK_BLOB_VERSION` or the buffer is truncated.
+ * Serializes `[version][kdf_id][params_len BE][params][encrypted_dek]`.
+ * `encrypted_dek` is typically `[IV][tag][ciphertext]` from AES-256-GCM.
  */
-export function parse_dek_blob(blob: Buffer): { header: DekBlobHeader; encrypted_dek: Buffer } {
+export function serialize_dek_blob(header: DekBlobHeader, encrypted_dek: Buffer): Buffer {
+  return Buffer.concat([build_header_bytes(header), encrypted_dek]);
+}
+
+export interface ParsedDekBlob {
+  readonly header: DekBlobHeader;
+  readonly header_bytes: Buffer;
+  readonly encrypted_dek: Buffer;
+}
+
+/** Parses a v1 blob. Throws if version is not `DEK_BLOB_VERSION` or the buffer is truncated. */
+export function parse_dek_blob(blob: Buffer): ParsedDekBlob {
   if (blob.length < HEADER_PREFIX_LEN) {
     throw new Error('Wrapped DEK blob too short');
   }
@@ -52,6 +60,7 @@ export function parse_dek_blob(blob: Buffer): { header: DekBlobHeader; encrypted
   const encrypted_dek = blob.subarray(params_end);
   return {
     header: { kdf_id, kdf_params },
+    header_bytes: blob.subarray(0, params_end),
     encrypted_dek,
   };
 }

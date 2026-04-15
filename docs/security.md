@@ -8,16 +8,16 @@ Atlas uses **envelope encryption** to isolate tenants cryptographically. This pa
 Master passphrase (env var)
     |
     v
-scrypt(passphrase, random_salt, N=65536, r=8, p=1)  -->  KEK (256-bit, per wrap)
+scrypt(passphrase, [len][tenant_id][random_salt], N=65536, r=8, p=1)  -->  KEK (256-bit, per wrap)
     |
     v
-KEK wraps/unwraps a random DEK (AES-256-GCM)
+KEK wraps/unwraps a random DEK (AES-256-GCM with header as AAD)
     |
     v
 DEK encrypts all data + manifests for that tenant
 ```
 
-The **random salt** (32 bytes from a CSPRNG) is stored inside the wrapped DEK blob at `_meta/dek.enc`, not derived from the Azure AD tenant ID. Each time the DEK is re-wrapped, a new salt can be used; the blob format is versioned so future releases can add new KDF algorithms (e.g. Argon2) without ambiguity.
+The effective scrypt salt is a **length-prefixed domain separator**: `[2-byte tenant_id length, big-endian][tenant_id UTF-8][32 random bytes from CSPRNG]`. The random salt is stored inside the wrapped DEK blob at `_meta/dek.enc`; the tenant ID is not stored in the blob (it is already known from the bucket context). This ensures that even with the same passphrase, each tenant derives a unique KEK -- an attacker who compromises one tenant's blob cannot use it to attack another tenant's DEK. The blob format is versioned so future releases can add new KDF algorithms (e.g. Argon2) without ambiguity.
 
 ### Why Envelope Encryption
 
@@ -34,28 +34,30 @@ The KEK is derived using **scrypt**, a memory-hard key derivation function desig
 Parameters used by Atlas (scrypt strategy, `kdf_id = 0x01` in the wrapped DEK blob):
 
 
-| Parameter       | Value                                        | Purpose                                                                         |
-| --------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
-| N (cost)        | 65536                                        | CPU/memory cost factor (2^16 iterations; OWASP-aligned for sensitive workloads) |
-| r (block size)  | 8                                            | Memory usage multiplier                                                         |
-| p (parallelism) | 1                                            | Sequential derivation (no parallel lanes)                                       |
-| Salt            | 32 random bytes (CSPRNG), stored in the blob | Unpredictable per wrap; not the tenant ID                                       |
-| Output          | 32 bytes (256 bits)                          | AES-256 key length                                                              |
+| Parameter       | Value                                                | Purpose                                                                         |
+| --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------- |
+| N (cost)        | 65536 (minimum enforced: 16384)                      | CPU/memory cost factor (2^16 iterations; OWASP-aligned for sensitive workloads) |
+| r (block size)  | 8                                                    | Memory usage multiplier                                                         |
+| p (parallelism) | 1                                                    | Sequential derivation (no parallel lanes)                                       |
+| Salt            | `[2-byte len][tenant_id][32 random bytes]`, per wrap | Domain-separated per tenant; random component stored in the blob                |
+| Output          | 32 bytes (256 bits)                                  | AES-256 key length                                                              |
 
 
-**Tenant isolation** comes from separate S3 buckets per tenant and separate random DEKs. The passphrase is global to the Atlas deployment, but an attacker who obtains one tenant's wrapped DEK cannot derive that tenant's KEK without the passphrase **and** the salt embedded in that blob (which is not public in the same way a discoverable tenant GUID would be).
+**Tenant isolation** comes from three layers: separate S3 buckets per tenant, separate random DEKs, and tenant-scoped KEK derivation. The passphrase is global to the Atlas deployment, but each tenant's KEK is derived with a length-prefixed domain separator that includes the tenant ID and a unique random salt. An attacker who obtains one tenant's wrapped DEK blob cannot use it to derive another tenant's KEK -- each derivation is cryptographically bound to its tenant. The enforced minimum N=16384 ensures that even with full knowledge of the code, tenant IDs, and blob contents, brute-forcing the passphrase through scrypt remains costly.
 
 ### Wrapped DEK blob format (v1)
 
 `_meta/dek.enc` is not raw AES-GCM output. It is a **versioned envelope**:
 
 ```
-[1 byte: format version 0x01]
-[1 byte: KDF id, e.g. 0x01 = scrypt]
-[2 bytes: KDF params length, big-endian]
-[variable: KDF-specific params — for scrypt: N, r, p, 32-byte salt]
+[1 byte: format version 0x01]                              ┐
+[1 byte: KDF id, e.g. 0x01 = scrypt]                       │  header (used as GCM AAD)
+[2 bytes: KDF params length, big-endian]                    │
+[variable: KDF-specific params — for scrypt: N, r, p, salt] ┘
 [12-byte IV][16-byte GCM tag][ciphertext]  ← AES-256-GCM encryption of the DEK
 ```
+
+The entire header (version through KDF params) is passed as **Additional Authenticated Data (AAD)** to AES-256-GCM. This means tampering with any header field -- the version byte, the KDF identifier, the scrypt parameters, or the salt -- is detected by the GCM authentication tag and causes decryption to fail. An attacker with S3 write access cannot downgrade KDF parameters or swap salts without being detected.
 
 New KDF algorithms can be registered in code alongside scrypt; the outer length-prefixed header keeps parsing unambiguous. Application data ciphertext format (`[IV][tag][ciphertext]`) is unchanged.
 
@@ -71,6 +73,16 @@ There is **no recovery path** if the passphrase is lost: the DEK cannot be unwra
 
 **Treat the passphrase as critically as the data itself.** Store it in a password manager, a sealed envelope in a safe, or a secrets management system -- but never lose it.
 :::
+
+### Passphrase Strength
+
+The encryption scheme follows Kerckhoffs's principle: security rests entirely on the passphrase, not on secrecy of the code, algorithms, or parameters. The source code is public, tenant IDs are discoverable, and the blob header (including scrypt parameters and the random salt) is stored in plaintext. The only secret is the passphrase.
+
+With scrypt at N=65536 and r=8, each brute-force guess costs ~64 MiB of RAM and significant CPU. Atlas warns at startup if the passphrase is shorter than 14 characters. For production deployments:
+
+- Use **at least 5 random words** (diceware) or **20+ random characters** with mixed case, digits, and symbols.
+- A passphrase shorter than 14 characters is vulnerable to brute-force with commodity GPUs.
+- Store the passphrase in a password manager or secrets management system (e.g. HashiCorp Vault, AWS Secrets Manager).
 
 ## Encryption Details
 
