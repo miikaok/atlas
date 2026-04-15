@@ -58,6 +58,10 @@ export default defineConfig({
           { text: 'SDK Examples', link: '/reference/examples' },
         ],
       },
+      {
+        text: 'Project',
+        items: [{ text: 'Roadmap', link: '/roadmap' }],
+      },
     ],
 
     socialLinks: [{ icon: 'github', link: 'https://github.com/miikaok/atlas' }],
