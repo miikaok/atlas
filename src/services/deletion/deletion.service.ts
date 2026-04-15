@@ -22,8 +22,8 @@ export class DeletionService implements DeletionUseCase {
    */
   async delete_mailbox_data(tenant_id: string, mailbox_id: string): Promise<DeletionResult> {
     mailbox_id = mailbox_id.toLowerCase();
-    const ctx = await this._tenant_factory.create(tenant_id);
-    return delete_prefixes(ctx.storage, [
+    const { storage } = await this._tenant_factory.create_storage_only(tenant_id);
+    return delete_prefixes(storage, [
       `manifests/${mailbox_id}/`,
       `data/${mailbox_id}/`,
       `attachments/${mailbox_id}/`,
@@ -57,8 +57,8 @@ export class DeletionService implements DeletionUseCase {
    * (including the encrypted DEK). This is irreversible.
    */
   async purge_tenant(tenant_id: string): Promise<DeletionResult> {
-    const ctx = await this._tenant_factory.create(tenant_id);
-    const core = await delete_prefixes(ctx.storage, ['manifests/', 'data/', 'attachments/']);
+    const { storage } = await this._tenant_factory.create_storage_only(tenant_id);
+    const core = await delete_prefixes(storage, ['manifests/', 'data/', 'attachments/']);
     if (
       core.retained_objects > 0 ||
       core.retained_manifests > 0 ||
@@ -68,7 +68,7 @@ export class DeletionService implements DeletionUseCase {
       return core;
     }
 
-    const meta = await delete_prefixes(ctx.storage, ['_meta/']);
+    const meta = await delete_prefixes(storage, ['_meta/']);
     return {
       deleted_objects: core.deleted_objects + meta.deleted_objects,
       deleted_manifests: core.deleted_manifests + meta.deleted_manifests,

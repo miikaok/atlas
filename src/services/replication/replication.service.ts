@@ -148,7 +148,6 @@ export class ReplicationService implements ReplicationUseCase {
       source_ctx.storage,
       target_ctx.storage,
       this._config.encryption_passphrase,
-      tenant_id,
     );
     const rep = await replicate_snapshot_to_target(source_ctx, target_ctx, manifest);
     return build_replication_result(
@@ -172,7 +171,6 @@ export class ReplicationService implements ReplicationUseCase {
       source_ctx.storage,
       target_ctx.storage,
       this._config.encryption_passphrase,
-      tenant_id,
     );
     const rep = await replicate_snapshot_to_target(source_ctx, target_ctx, manifest, {
       skip_marker: is_rehydration,
@@ -185,14 +183,13 @@ export class ReplicationService implements ReplicationUseCase {
     primary_ctx: TenantContext,
     manifests: Manifest[],
     source: StorageTarget,
-    tenant_id: string,
+    _tenant_id: string,
   ): Promise<ReplicationResult> {
     const start = Date.now();
     await this._validate_dek(
       source_ctx.storage,
       primary_ctx.storage,
       this._config.encryption_passphrase,
-      tenant_id,
     );
 
     let total_copied = 0;

@@ -58,6 +58,7 @@ describe('DeletionService', () => {
   let container: Container;
   let mock_manifests: ManifestRepository;
   let mock_context: TenantContext;
+  let mock_factory: TenantContextFactory;
   let service: DeletionService;
 
   beforeEach(() => {
@@ -70,8 +71,12 @@ describe('DeletionService', () => {
       list_all_manifests: vi.fn().mockResolvedValue([]),
     };
 
-    const mock_factory: TenantContextFactory = {
+    mock_factory = {
       create: vi.fn().mockResolvedValue(mock_context),
+      create_storage_only: vi.fn().mockImplementation(async (tid: string) => ({
+        tenant_id: tid,
+        storage: mock_context.storage,
+      })),
     };
 
     container = new Container();
@@ -108,6 +113,8 @@ describe('DeletionService', () => {
       expect(mock_context.storage.delete).toHaveBeenCalledWith(
         'manifests/user@test.com/snap-1.json',
       );
+      expect(mock_factory.create_storage_only).toHaveBeenCalledWith('t');
+      expect(mock_factory.create).not.toHaveBeenCalled();
     });
 
     it('lists correct prefixes with manifests first', async () => {
@@ -125,6 +132,8 @@ describe('DeletionService', () => {
       expect(result.deleted_manifests).toBe(0);
       expect(result.retained_objects).toBe(0);
       expect(mock_context.storage.delete).not.toHaveBeenCalled();
+      expect(mock_factory.create_storage_only).toHaveBeenCalledWith('t');
+      expect(mock_factory.create).not.toHaveBeenCalled();
     });
   });
 
@@ -148,6 +157,8 @@ describe('DeletionService', () => {
       expect(result.retained_manifests).toBe(0);
       expect(mock_context.storage.delete).toHaveBeenCalledWith('manifests/u@t.com/snap-42.json');
       expect(mock_context.storage.delete).toHaveBeenCalledTimes(1);
+      expect(mock_factory.create).toHaveBeenCalledWith('t');
+      expect(mock_factory.create_storage_only).not.toHaveBeenCalled();
     });
 
     it('returns zeros when snapshot is not found', async () => {
@@ -157,6 +168,8 @@ describe('DeletionService', () => {
       expect(result.deleted_manifests).toBe(0);
       expect(result.failed_manifests).toBe(0);
       expect(mock_context.storage.delete).not.toHaveBeenCalled();
+      expect(mock_factory.create).toHaveBeenCalledWith('t');
+      expect(mock_factory.create_storage_only).not.toHaveBeenCalled();
     });
 
     it('reports retained manifest when backend blocks delete with Object Lock', async () => {
@@ -175,6 +188,8 @@ describe('DeletionService', () => {
       expect(result.deleted_manifests).toBe(0);
       expect(result.retained_manifests).toBe(1);
       expect(result.failed_manifests).toBe(0);
+      expect(mock_factory.create).toHaveBeenCalledWith('t');
+      expect(mock_factory.create_storage_only).not.toHaveBeenCalled();
     });
   });
 
@@ -198,6 +213,8 @@ describe('DeletionService', () => {
       expect(result.retained_objects).toBe(0);
       expect(result.failed_manifests).toBe(0);
       expect(mock_context.storage.delete).toHaveBeenCalledTimes(5);
+      expect(mock_factory.create_storage_only).toHaveBeenCalledWith('t');
+      expect(mock_factory.create).not.toHaveBeenCalled();
     });
 
     it('lists the four expected prefixes with manifests first', async () => {
@@ -207,6 +224,8 @@ describe('DeletionService', () => {
       expect(mock_context.storage.list).toHaveBeenCalledWith('data/');
       expect(mock_context.storage.list).toHaveBeenCalledWith('attachments/');
       expect(mock_context.storage.list).toHaveBeenCalledWith('_meta/');
+      expect(mock_factory.create_storage_only).toHaveBeenCalledWith('t');
+      expect(mock_factory.create).not.toHaveBeenCalled();
     });
 
     it('handles empty tenant bucket', async () => {
@@ -216,6 +235,8 @@ describe('DeletionService', () => {
       expect(result.deleted_manifests).toBe(0);
       expect(result.retained_objects).toBe(0);
       expect(result.retained_manifests).toBe(0);
+      expect(mock_factory.create_storage_only).toHaveBeenCalledWith('t');
+      expect(mock_factory.create).not.toHaveBeenCalled();
     });
   });
 });

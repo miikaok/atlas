@@ -85,7 +85,7 @@ class DefaultStorageTarget implements StorageTarget {
     await ensure_bucket_exists(this._client, bucket, true);
 
     const storage = new S3ObjectStorage(this._client, bucket);
-    const key_service = new EnvelopeKeyService(this._passphrase, tenant_id);
+    const key_service = new EnvelopeKeyService(this._passphrase);
     const dek = await this.try_load_dek(storage, key_service);
 
     if (dek) {

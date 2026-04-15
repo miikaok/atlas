@@ -8,7 +8,7 @@ Atlas uses **envelope encryption** to isolate tenants cryptographically. This pa
 Master passphrase (env var)
     |
     v
-scrypt(passphrase, tenant_id, N=16384, r=8, p=1)  -->  KEK (256-bit, per-tenant)
+scrypt(passphrase, random_salt, N=65536, r=8, p=1)  -->  KEK (256-bit, per wrap)
     |
     v
 KEK wraps/unwraps a random DEK (AES-256-GCM)
@@ -16,6 +16,8 @@ KEK wraps/unwraps a random DEK (AES-256-GCM)
     v
 DEK encrypts all data + manifests for that tenant
 ```
+
+The **random salt** (32 bytes from a CSPRNG) is stored inside the wrapped DEK blob at `_meta/dek.enc`, not derived from the Azure AD tenant ID. Each time the DEK is re-wrapped, a new salt can be used; the blob format is versioned so future releases can add new KDF algorithms (e.g. Argon2) without ambiguity.
 
 ### Why Envelope Encryption
 
@@ -27,29 +29,43 @@ Envelope encryption separates the key that protects your data (DEK) from the key
 
 ### KEK Derivation: scrypt
 
-The KEK is derived using **scrypt**, a memory-hard key derivation function designed to resist brute-force attacks from GPUs and custom hardware (ASICs). Unlike simpler hash functions, scrypt requires a large amount of RAM for each derivation attempt, making parallel attacks expensive.
+The KEK is derived using **scrypt**, a memory-hard key derivation function designed to resist brute-force attacks from GPUs and custom hardware (ASICs). Unlike simpler hash functions, scrypt requires a large amount of RAM for each derivation attempt, making parallel attacks expensive. With N=65536 and r=8, Node/OpenSSL needs a raised `maxmem` ceiling (~128 MiB) per unwrap; expect a short CPU+memory spike when loading `_meta/dek.enc`.
 
-Parameters used by Atlas:
+Parameters used by Atlas (scrypt strategy, `kdf_id = 0x01` in the wrapped DEK blob):
 
 | Parameter | Value | Purpose |
 | --- | --- | --- |
-| N (cost) | 16384 | CPU/memory cost factor (2^14 iterations) |
+| N (cost) | 65536 | CPU/memory cost factor (2^16 iterations; OWASP-aligned for sensitive workloads) |
 | r (block size) | 8 | Memory usage multiplier |
 | p (parallelism) | 1 | Sequential derivation (no parallel lanes) |
-| Salt | `tenant_id` string | Ensures different KEKs per tenant |
+| Salt | 32 random bytes (CSPRNG), stored in the blob | Unpredictable per wrap; not the tenant ID |
 | Output | 32 bytes (256 bits) | AES-256 key length |
 
-The **tenant ID as salt** is a deliberate design choice. It means that the same master passphrase used across multiple tenants produces completely different KEKs for each tenant. An attacker who compromises one tenant's KEK gains nothing toward decrypting another tenant's data.
+**Tenant isolation** comes from separate S3 buckets per tenant and separate random DEKs. The passphrase is global to the Atlas deployment, but an attacker who obtains one tenant's wrapped DEK cannot derive that tenant's KEK without the passphrase **and** the salt embedded in that blob (which is not public in the same way a discoverable tenant GUID would be).
+
+### Wrapped DEK blob format (v1)
+
+`_meta/dek.enc` is not raw AES-GCM output. It is a **versioned envelope**:
+
+```
+[1 byte: format version 0x01]
+[1 byte: KDF id, e.g. 0x01 = scrypt]
+[2 bytes: KDF params length, big-endian]
+[variable: KDF-specific params — for scrypt: N, r, p, 32-byte salt]
+[12-byte IV][16-byte GCM tag][ciphertext]  ← AES-256-GCM encryption of the DEK
+```
+
+New KDF algorithms can be registered in code alongside scrypt; the outer length-prefixed header keeps parsing unambiguous. Application data ciphertext format (`[IV][tag][ciphertext]`) is unchanged.
 
 ### DEK: Data Encryption Key
 
 - **Generated once** per tenant: a cryptographically random 256-bit key.
 - **Stored wrapped** (encrypted with the KEK) at `_meta/dek.enc` in the tenant's S3 bucket.
 - **Never stored in plaintext** -- only exists in memory during a backup/restore run.
-- **Re-derived on every run**: Atlas reads `_meta/dek.enc`, derives the KEK from the passphrase, unwraps the DEK, and holds it in memory for the session.
+- **Re-derived on every run**: Atlas reads `_meta/dek.enc`, parses the versioned header, derives the KEK from the passphrase and embedded KDF parameters, unwraps the DEK, and holds it in memory for the session.
 
 ::: danger Passphrase Is Irrecoverable
-There is **no key rotation mechanism** and **no recovery path**. If you lose the passphrase, the DEK cannot be unwrapped, and all data for that tenant is permanently inaccessible. Changing the passphrase without migrating the wrapped DEK will cause GCM authentication failures when Atlas tries to unwrap `_meta/dek.enc`.
+There is **no recovery path** if the passphrase is lost: the DEK cannot be unwrapped. Changing the passphrase without re-wrapping `_meta/dek.enc` (or restoring from a backup of the wrapped file under the old passphrase) will cause GCM authentication failures.
 
 **Treat the passphrase as critically as the data itself.** Store it in a password manager, a sealed envelope in a safe, or a secrets management system -- but never lose it.
 :::

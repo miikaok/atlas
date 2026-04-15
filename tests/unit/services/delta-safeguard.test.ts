@@ -91,7 +91,13 @@ describe('MailboxSyncService – force_full / stale-delta safeguard', () => {
       list_all_manifests: vi.fn().mockResolvedValue([]),
     };
 
-    const mock_factory: TenantContextFactory = { create: vi.fn().mockResolvedValue(mock_context) };
+    const mock_factory: TenantContextFactory = {
+      create: vi.fn().mockResolvedValue(mock_context),
+      create_storage_only: vi.fn().mockImplementation(async (tid: string) => ({
+        tenant_id: tid,
+        storage: mock_context.storage,
+      })),
+    };
 
     const container = new Container();
     container.bind(MAILBOX_CONNECTOR_TOKEN).toConstantValue(mock_connector);

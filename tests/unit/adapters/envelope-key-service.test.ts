@@ -1,38 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { EnvelopeKeyService, derive_kek } from '@/adapters/keystore/envelope-key-service.adapter';
+import { EnvelopeKeyService } from '@/adapters/keystore/envelope-key-service.adapter';
+import { KDF_SCRYPT } from '@/adapters/keystore/kdf-strategy';
+import { DEK_BLOB_VERSION, parse_dek_blob } from '@/adapters/keystore/dek-blob-codec';
 
 describe('EnvelopeKeyService', () => {
   const passphrase = 'test-passphrase';
-  const tenant_id = 'tenant-abc';
-
-  describe('derive_kek', () => {
-    it('produces a 32-byte key', () => {
-      const kek = derive_kek(passphrase, tenant_id);
-      expect(kek.length).toBe(32);
-    });
-
-    it('is deterministic for same inputs', () => {
-      const kek1 = derive_kek(passphrase, tenant_id);
-      const kek2 = derive_kek(passphrase, tenant_id);
-      expect(kek1.equals(kek2)).toBe(true);
-    });
-
-    it('differs across tenants', () => {
-      const kek_a = derive_kek(passphrase, 'tenant-a');
-      const kek_b = derive_kek(passphrase, 'tenant-b');
-      expect(kek_a.equals(kek_b)).toBe(false);
-    });
-
-    it('differs across passphrases', () => {
-      const kek1 = derive_kek('pass-1', tenant_id);
-      const kek2 = derive_kek('pass-2', tenant_id);
-      expect(kek1.equals(kek2)).toBe(false);
-    });
-  });
 
   describe('encrypt / decrypt round-trip', () => {
     it('round-trips arbitrary data', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
       const plaintext = Buffer.from('hello world, this is a test message');
 
@@ -42,7 +18,7 @@ describe('EnvelopeKeyService', () => {
     });
 
     it('produces different ciphertext each time (random IV)', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
       const plaintext = Buffer.from('same data');
 
@@ -52,7 +28,7 @@ describe('EnvelopeKeyService', () => {
     });
 
     it('ciphertext is longer than plaintext (IV + auth tag)', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
       const plaintext = Buffer.from('test');
 
@@ -61,7 +37,7 @@ describe('EnvelopeKeyService', () => {
     });
 
     it('rejects tampered ciphertext', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
       const ciphertext = svc.encrypt(Buffer.from('data'), dek);
 
@@ -70,7 +46,7 @@ describe('EnvelopeKeyService', () => {
     });
 
     it('rejects truncated ciphertext', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
       const short = Buffer.alloc(10);
 
@@ -80,7 +56,7 @@ describe('EnvelopeKeyService', () => {
 
   describe('wrap / unwrap DEK', () => {
     it('round-trips a DEK through wrap and unwrap', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
 
       const wrapped = svc.wrap_dek(dek);
@@ -88,32 +64,62 @@ describe('EnvelopeKeyService', () => {
       expect(unwrapped.equals(dek)).toBe(true);
     });
 
+    it('produces v1 blob with version and scrypt kdf id', () => {
+      const svc = new EnvelopeKeyService(passphrase);
+      const wrapped = svc.wrap_dek(svc.generate_dek());
+      expect(wrapped[0]).toBe(DEK_BLOB_VERSION);
+      expect(wrapped[1]).toBe(KDF_SCRYPT);
+    });
+
+    it('wrapped blob is 102 bytes for a 256-bit DEK', () => {
+      const svc = new EnvelopeKeyService(passphrase);
+      const wrapped = svc.wrap_dek(svc.generate_dek());
+      expect(wrapped.length).toBe(102);
+    });
+
+    it('uses different salts on successive wraps', () => {
+      const svc = new EnvelopeKeyService(passphrase);
+      const dek = svc.generate_dek();
+      const w1 = svc.wrap_dek(dek);
+      const w2 = svc.wrap_dek(dek);
+      const p1 = parse_dek_blob(w1).header.kdf_params.subarray(6);
+      const p2 = parse_dek_blob(w2).header.kdf_params.subarray(6);
+      expect(p1.equals(p2)).toBe(false);
+    });
+
     it('wrapped DEK does not contain the plaintext DEK', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       const dek = svc.generate_dek();
       const wrapped = svc.wrap_dek(dek);
 
       expect(wrapped.includes(dek)).toBe(false);
     });
 
-    it('cannot unwrap with wrong tenant passphrase', () => {
-      const svc_a = new EnvelopeKeyService(passphrase, 'tenant-a');
-      const svc_b = new EnvelopeKeyService(passphrase, 'tenant-b');
+    it('cannot unwrap with wrong passphrase', () => {
+      const svc_a = new EnvelopeKeyService(passphrase);
+      const svc_b = new EnvelopeKeyService('other-passphrase');
       const dek = svc_a.generate_dek();
 
       const wrapped = svc_a.wrap_dek(dek);
       expect(() => svc_b.unwrap_dek(wrapped)).toThrow();
     });
+
+    it('throws on unknown KDF id in blob', () => {
+      const svc = new EnvelopeKeyService(passphrase);
+      const wrapped = svc.wrap_dek(svc.generate_dek());
+      wrapped[1] = 0xff;
+      expect(() => svc.unwrap_dek(wrapped)).toThrow('Unknown KDF id');
+    });
   });
 
   describe('generate_dek', () => {
     it('produces a 32-byte key', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       expect(svc.generate_dek().length).toBe(32);
     });
 
     it('produces unique keys', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+      const svc = new EnvelopeKeyService(passphrase);
       const k1 = svc.generate_dek();
       const k2 = svc.generate_dek();
       expect(k1.equals(k2)).toBe(false);
