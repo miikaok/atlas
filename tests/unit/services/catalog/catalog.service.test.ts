@@ -290,5 +290,26 @@ describe('CatalogService', () => {
       const result = await service.read_message('t', 'snap-1', 'no-such-msg');
       expect(result).toBeUndefined();
     });
+
+    it('resolves message by 1-based index from atlas list output', async () => {
+      const message_json = { subject: 'Second' };
+      const plaintext = Buffer.from(JSON.stringify(message_json));
+      const ciphertext = Buffer.concat([Buffer.from('E'), plaintext]);
+
+      vi.mocked(mock_manifests.find_by_snapshot).mockResolvedValue(
+        make_manifest({
+          entries: [
+            { object_id: 'first', storage_key: 'data/k1', checksum: 'a', size_bytes: 1 },
+            { object_id: 'second', storage_key: 'data/k2', checksum: 'b', size_bytes: 1 },
+          ],
+        }),
+      );
+      vi.mocked(mock_context.storage.get as ReturnType<typeof vi.fn>).mockResolvedValue(ciphertext);
+
+      const result = await service.read_message('t', 'snap-1', '2');
+
+      expect(result?.message).toEqual(message_json);
+      expect(mock_context.storage.get).toHaveBeenCalledWith('data/k2');
+    });
   });
 });

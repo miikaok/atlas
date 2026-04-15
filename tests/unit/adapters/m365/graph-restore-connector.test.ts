@@ -8,12 +8,14 @@ function make_mock_client(): {
   api: ReturnType<typeof vi.fn>;
   post: ReturnType<typeof vi.fn>;
   put: ReturnType<typeof vi.fn>;
+  get: ReturnType<typeof vi.fn>;
   header: ReturnType<typeof vi.fn>;
 } {
   const client = {
     api: vi.fn().mockReturnThis(),
     post: vi.fn(),
     put: vi.fn(),
+    get: vi.fn(),
     header: vi.fn().mockReturnThis(),
   };
   client.api.mockReturnValue(client);
@@ -161,6 +163,80 @@ describe('GraphRestoreConnector', () => {
 
       expect(session.upload_url).toBe('https://upload.example.com/session');
       expect(session.expiration).toBe('2026-03-10T00:00:00Z');
+    });
+
+    it('throws when uploadUrl is missing', async () => {
+      mock_client.post.mockResolvedValue({});
+
+      await expect(
+        connector.create_upload_session('t', 'user@test.com', 'msg-1', 'f.bin', 1000),
+      ).rejects.toThrow('no uploadUrl');
+    });
+  });
+
+  describe('upload_attachment_chunk', () => {
+    it('sends Content-Range and PUT body', async () => {
+      mock_client.put.mockResolvedValue({});
+
+      await connector.upload_attachment_chunk('https://upload.example/u', Buffer.from('ab'), 0, 10);
+
+      expect(mock_client.api).toHaveBeenCalledWith('https://upload.example/u');
+      expect(mock_client.header).toHaveBeenCalledWith('Content-Range', 'bytes 0-1/10');
+      expect(mock_client.put).toHaveBeenCalledWith(Buffer.from('ab'));
+    });
+  });
+
+  describe('add_attachment large file', () => {
+    it('uses upload session and chunks for files >= 3 MiB', async () => {
+      mock_client.post
+        .mockResolvedValueOnce({
+          uploadUrl: 'https://upload.example/session',
+          expirationDateTime: '2026-03-10T00:00:00Z',
+        })
+        .mockResolvedValue({});
+      mock_client.put.mockResolvedValue({});
+
+      const big = Buffer.alloc(4 * 1024 * 1024, 7);
+      await connector.add_attachment('t', 'user@test.com', 'msg-1', {
+        name: 'huge.bin',
+        content_type: 'application/octet-stream',
+        content: big,
+        is_inline: false,
+      });
+
+      expect(mock_client.post).toHaveBeenCalled();
+      expect(mock_client.put.mock.calls.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('count_folder_messages', () => {
+    it('returns totalItemCount from Graph', async () => {
+      mock_client.get.mockResolvedValue({ totalItemCount: 42 });
+
+      const n = await connector.count_folder_messages('t', 'user@test.com', 'folder-1');
+
+      expect(n).toBe(42);
+      expect(mock_client.api).toHaveBeenCalledWith(
+        '/users/user@test.com/mailFolders/folder-1?$select=totalItemCount',
+      );
+    });
+  });
+
+  describe('list_folder_messages', () => {
+    it('maps subjects and defaults missing isDraft to true', async () => {
+      mock_client.get.mockResolvedValue({
+        value: [
+          { subject: 'Hi', isDraft: false },
+          { subject: undefined, isDraft: undefined },
+        ],
+      });
+
+      const rows = await connector.list_folder_messages('t', 'user@test.com', 'folder-1', 2);
+
+      expect(rows).toEqual([
+        { subject: 'Hi', is_draft: false },
+        { subject: '(no subject)', is_draft: true },
+      ]);
     });
   });
 });
