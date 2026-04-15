@@ -63,6 +63,10 @@ describe('VerificationService', () => {
 
     tenant_factory = {
       create: vi.fn().mockResolvedValue(context),
+      create_storage_only: vi.fn().mockImplementation(async (tid: string) => ({
+        tenant_id: tid,
+        storage: context.storage,
+      })),
     };
 
     manifests = {

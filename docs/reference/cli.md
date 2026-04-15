@@ -287,6 +287,8 @@ Atlas deletes **manifests first**, then data objects. This ordering is safe: if 
 When using `--snapshot`, only the manifest file is removed -- the underlying data objects are retained because they may be referenced by other snapshots (content-addressed deduplication).
 
 When using `--purge`, **everything** is deleted including the encrypted DEK at `_meta/dek.enc`. This is irreversible -- all data for the tenant becomes permanently inaccessible.
+
+`--purge` and mailbox-wide delete (`-m`) list and delete objects by key only: they do **not** need to unwrap `_meta/dek.enc`. You can use them to empty a bucket even when the wrapped DEK blob is missing, corrupt, or from an older format (you still cannot decrypt data without a valid passphrase and blob).
 :::
 
 ## `atlas stats`

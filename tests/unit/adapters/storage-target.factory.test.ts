@@ -3,7 +3,7 @@ import { EnvelopeKeyService } from '@/adapters/keystore/envelope-key-service.ada
 import { create_storage_target } from '@/adapters/storage-target.factory';
 import type { StorageTargetConfig } from '@/ports/replication/storage-target.port';
 
-const ks = new EnvelopeKeyService('test-pass', 'tenant-1');
+const ks = new EnvelopeKeyService('test-pass');
 const dek = ks.generate_dek();
 const wrapped_dek = ks.wrap_dek(dek);
 

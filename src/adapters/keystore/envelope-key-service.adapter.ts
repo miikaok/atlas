@@ -1,27 +1,25 @@
-import { scryptSync, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { DEFAULT_KDF_STRATEGY, KDF_STRATEGIES } from '@/adapters/keystore/kdf-strategy';
+import { parse_dek_blob, serialize_dek_blob } from '@/adapters/keystore/dek-blob-codec';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
-const SCRYPT_N = 16384;
-const SCRYPT_R = 8;
-const SCRYPT_P = 1;
 
 /**
  * Envelope encryption using AES-256-GCM.
  *
- * - A master passphrase + tenant_id derive a unique KEK per tenant (scrypt).
+ * - A master passphrase derives a KEK per wrap via a registered KDF strategy (scrypt v1).
  * - A random DEK is generated per tenant, encrypted ("wrapped") with the KEK.
+ * - Wrapped DEK format is versioned; see `docs/security.md`.
  * - All tenant data is encrypted with the DEK.
- *
- * Encrypted format: [12-byte IV] [16-byte auth tag] [ciphertext]
  */
 export class EnvelopeKeyService {
-  private readonly _kek: Buffer;
+  private readonly _passphrase: string;
 
-  constructor(passphrase: string, tenant_id: string) {
-    this._kek = derive_kek(passphrase, tenant_id);
+  constructor(passphrase: string) {
+    this._passphrase = passphrase;
   }
 
   /** Encrypts plaintext using the given DEK. */
@@ -39,27 +37,25 @@ export class EnvelopeKeyService {
     return randomBytes(KEY_LENGTH);
   }
 
-  /** Encrypts (wraps) a DEK with this tenant's KEK. */
+  /** Encrypts (wraps) a DEK with a KEK derived from the passphrase and random salt (v1 blob). */
   wrap_dek(dek: Buffer): Buffer {
-    return aes_gcm_encrypt(dek, this._kek);
+    const strategy = DEFAULT_KDF_STRATEGY;
+    const params = strategy.generate_params();
+    const kek = strategy.derive_kek(this._passphrase, params);
+    const encrypted = aes_gcm_encrypt(dek, kek);
+    return serialize_dek_blob({ kdf_id: strategy.kdf_id, kdf_params: params }, encrypted);
   }
 
-  /** Decrypts (unwraps) a wrapped DEK with this tenant's KEK. */
+  /** Decrypts (unwraps) a wrapped DEK using the passphrase and blob metadata. */
   unwrap_dek(wrapped: Buffer): Buffer {
-    return aes_gcm_decrypt(wrapped, this._kek);
+    const { header, encrypted_dek } = parse_dek_blob(wrapped);
+    const strategy = KDF_STRATEGIES.get(header.kdf_id);
+    if (!strategy) {
+      throw new Error(`Unknown KDF id in wrapped DEK: ${header.kdf_id}`);
+    }
+    const kek = strategy.derive_kek(this._passphrase, header.kdf_params);
+    return aes_gcm_decrypt(encrypted_dek, kek);
   }
-}
-
-/**
- * Derives a 256-bit key encryption key from a passphrase and tenant_id salt
- * using scrypt (N=65536, r=8, p=1).
- */
-export function derive_kek(passphrase: string, tenant_id: string): Buffer {
-  return scryptSync(passphrase, tenant_id, KEY_LENGTH, {
-    N: SCRYPT_N,
-    r: SCRYPT_R,
-    p: SCRYPT_P,
-  });
 }
 
 /** AES-256-GCM encrypt. Returns: [IV (12)] [auth tag (16)] [ciphertext]. */
