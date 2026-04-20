@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { pad_folder_column } from '@/services/shared/progress-display-format';
 import { format_duration } from '@/services/shared/progress-rate';
 
 type FolderStatus = 'pending' | 'active' | 'done' | 'skipped' | 'interrupted' | 'error';
@@ -162,12 +163,8 @@ export class RestoreProgressDashboard {
   }
 }
 
-function pad_name(name: string, width = 28): string {
-  return name.length > width ? name.slice(0, width - 1) + '~' : name.padEnd(width);
-}
-
 function format_folder_row(row: FolderRow): string {
-  const name = pad_name(row.name);
+  const name = pad_folder_column(row.name);
 
   switch (row.status) {
     case 'pending':

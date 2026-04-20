@@ -174,6 +174,33 @@ describe('S3ObjectStorage', () => {
     });
   });
 
+  describe('list_versions', () => {
+    it('aggregates versions, delete markers, and paginates', async () => {
+      mock_s3.send
+        .mockResolvedValueOnce({
+          Versions: [{ Key: 'k1', VersionId: 'v1' }],
+          DeleteMarkers: [{ Key: 'k2', VersionId: 'dm1' }],
+          IsTruncated: true,
+          NextKeyMarker: 'mk',
+          NextVersionIdMarker: 'mv',
+        })
+        .mockResolvedValueOnce({
+          Versions: [{ Key: 'k3', VersionId: 'v2' }],
+          DeleteMarkers: [],
+          IsTruncated: false,
+        });
+
+      const rows = await storage.list_versions('pre/');
+
+      expect(rows).toEqual([
+        { key: 'k1', version_id: 'v1', is_delete_marker: false },
+        { key: 'k2', version_id: 'dm1', is_delete_marker: true },
+        { key: 'k3', version_id: 'v2', is_delete_marker: false },
+      ]);
+      expect(mock_s3.send).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('probe_immutability', () => {
     it('uses cached probe result per bucket', async () => {
       mock_s3.send

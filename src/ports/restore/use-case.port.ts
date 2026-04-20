@@ -3,7 +3,11 @@ export interface RestoreResult {
   readonly restored_count: number;
   readonly attachment_count: number;
   readonly error_count: number;
+  readonly attachment_error_count: number;
+  readonly verification_failures: number;
   readonly errors: string[];
+  readonly attachment_errors: string[];
+  readonly verification_warnings: string[];
   readonly restore_folder_name: string;
 }
 

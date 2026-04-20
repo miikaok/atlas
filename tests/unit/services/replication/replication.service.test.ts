@@ -75,6 +75,7 @@ describe('ReplicationService', () => {
       storage: source_storage,
       encrypt: vi.fn((d: Buffer) => d),
       decrypt: vi.fn((d: Buffer) => d),
+      destroy: vi.fn(),
     };
 
     target_ctx = {
@@ -82,9 +83,16 @@ describe('ReplicationService', () => {
       storage: target_storage,
       encrypt: vi.fn((d: Buffer) => d),
       decrypt: vi.fn((d: Buffer) => d),
+      destroy: vi.fn(),
     };
 
-    tenant_factory = { create: vi.fn().mockResolvedValue(source_ctx) };
+    tenant_factory = {
+      create: vi.fn().mockResolvedValue(source_ctx),
+      create_storage_only: vi.fn().mockImplementation(async (tid: string) => ({
+        tenant_id: tid,
+        storage: source_ctx.storage,
+      })),
+    };
 
     manifests = {
       save: vi.fn(),

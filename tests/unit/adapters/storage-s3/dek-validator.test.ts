@@ -38,9 +38,9 @@ describe('validate_dek_match', () => {
   });
 
   it('passes when both sides have the same DEK', async () => {
-    const key_service = new EnvelopeKeyService(passphrase, tenant_id);
+    const key_service = new EnvelopeKeyService(passphrase);
     const dek = key_service.generate_dek();
-    const wrapped = key_service.wrap_dek(dek);
+    const wrapped = key_service.wrap_dek(dek, tenant_id);
 
     vi.mocked(target_storage.exists).mockResolvedValue(true);
     vi.mocked(source_storage.get).mockResolvedValue(wrapped);
@@ -52,11 +52,11 @@ describe('validate_dek_match', () => {
   });
 
   it('throws DekMismatchError when DEKs differ', async () => {
-    const key_service = new EnvelopeKeyService(passphrase, tenant_id);
+    const key_service = new EnvelopeKeyService(passphrase);
     const dek_a = key_service.generate_dek();
     const dek_b = key_service.generate_dek();
-    const wrapped_a = key_service.wrap_dek(dek_a);
-    const wrapped_b = key_service.wrap_dek(dek_b);
+    const wrapped_a = key_service.wrap_dek(dek_a, tenant_id);
+    const wrapped_b = key_service.wrap_dek(dek_b, tenant_id);
 
     vi.mocked(target_storage.exists).mockResolvedValue(true);
     vi.mocked(source_storage.get).mockResolvedValue(wrapped_a);

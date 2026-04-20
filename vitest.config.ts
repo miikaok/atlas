@@ -18,7 +18,14 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov', 'html', 'json-summary'],
       include: ['src/**/*.ts'],
-      exclude: ['src/cli.ts', 'src/**/index.ts'],
+      exclude: [
+        'src/cli.ts',
+        'src/sdk.ts',
+        'src/container.ts',
+        'src/**/index.ts',
+        'src/**/*-dashboard.ts',
+        'src/cli/adapters/**/*.ts',
+      ],
     },
   },
 });

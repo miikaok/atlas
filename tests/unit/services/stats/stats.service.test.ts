@@ -51,6 +51,7 @@ function make_mock_context(): TenantContext {
     storage: make_mock_storage(),
     encrypt: vi.fn((data: Buffer) => Buffer.concat([Buffer.from('E'), data])),
     decrypt: vi.fn((data: Buffer) => data.subarray(1)),
+    destroy: vi.fn(),
   };
 }
 
@@ -70,6 +71,10 @@ describe('StatsService', () => {
 
     const mock_factory: TenantContextFactory = {
       create: vi.fn().mockResolvedValue(mock_context),
+      create_storage_only: vi.fn().mockImplementation(async (tid: string) => ({
+        tenant_id: tid,
+        storage: mock_context.storage,
+      })),
     };
 
     const container = new Container();

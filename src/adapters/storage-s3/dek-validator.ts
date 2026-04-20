@@ -31,9 +31,10 @@ export async function validate_dek_match(
   const source_wrapped = await source_storage.get(DEK_META_KEY);
   const target_wrapped = await target_storage.get(DEK_META_KEY);
 
-  const key_service = new EnvelopeKeyService(passphrase, tenant_id);
-  const source_dek = key_service.unwrap_dek(source_wrapped);
-  const target_dek = key_service.unwrap_dek(target_wrapped);
+  const key_service = new EnvelopeKeyService(passphrase);
+  const source_dek = key_service.unwrap_dek(source_wrapped, tenant_id);
+  const target_dek = key_service.unwrap_dek(target_wrapped, tenant_id);
+  key_service.destroy();
 
   if (source_dek.length !== target_dek.length || !timingSafeEqual(source_dek, target_dek)) {
     throw new DekMismatchError();

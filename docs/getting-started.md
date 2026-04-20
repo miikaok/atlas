@@ -18,7 +18,7 @@ Atlas stores backups in any S3-compatible object storage. For local development 
 cd docker && docker compose up -d
 ```
 
-This starts MinIO on port **9000** (S3 API) and port **9001** (web console). See the [Self-Hosting Guide](./self-hosting.md) for production deployment with external storage, RAID, and security hardening.
+This starts MinIO on port **9000** (S3 API) and port **9001** (web console). See the [Self-Hosting Guide](/self-hosting/) for production deployment with external storage, RAID, and security hardening.
 
 ## Configure
 
@@ -74,7 +74,7 @@ atlas restore -m user@company.com -f Inbox
 atlas save -m user@company.com -o backup.zip
 ```
 
-See the full [CLI Reference](./reference/cli.md) for all commands and options.
+See the full [CLI Reference](/reference/cli) for all commands and options.
 
 ## Use as a Library
 

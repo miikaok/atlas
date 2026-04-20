@@ -72,4 +72,14 @@ describe('backup.command immutability options', () => {
     expect(sync_options.object_lock_policy.mode).toBe('COMPLIANCE');
     expect(sync_options.object_lock_request.mode).toBe('COMPLIANCE');
   });
+
+  it('maps variadic -f/--folder to folder_filter array (keeps multi-word segments)', async () => {
+    await program.parseAsync(
+      ['backup', '--mailbox', 'user@test.com', '-f', 'Inbox', 'Sent Items', 'Archive/2024'],
+      { from: 'user' },
+    );
+
+    const sync_options = mock_run_backup_with_cli_adapter.mock.calls[0][3];
+    expect(sync_options.folder_filter).toEqual(['Inbox', 'Sent Items', 'Archive/2024']);
+  });
 });

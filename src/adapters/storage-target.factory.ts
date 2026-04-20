@@ -85,8 +85,8 @@ class DefaultStorageTarget implements StorageTarget {
     await ensure_bucket_exists(this._client, bucket, true);
 
     const storage = new S3ObjectStorage(this._client, bucket);
-    const key_service = new EnvelopeKeyService(this._passphrase, tenant_id);
-    const dek = await this.try_load_dek(storage, key_service);
+    const key_service = new EnvelopeKeyService(this._passphrase);
+    const dek = await this.try_load_dek(storage, key_service, tenant_id);
 
     if (dek) {
       return {
@@ -94,9 +94,11 @@ class DefaultStorageTarget implements StorageTarget {
         storage,
         encrypt: (data: Buffer): Buffer => key_service.encrypt(data, dek),
         decrypt: (data: Buffer): Buffer => key_service.decrypt(data, dek),
+        destroy: (): void => key_service.destroy(),
       };
     }
 
+    key_service.destroy();
     return {
       tenant_id,
       storage,
@@ -106,16 +108,18 @@ class DefaultStorageTarget implements StorageTarget {
       decrypt: (): Buffer => {
         throw new Error('Cannot decrypt: no DEK on target. Copy _meta/dek.enc first.');
       },
+      destroy: (): void => {},
     };
   }
 
   private async try_load_dek(
     storage: S3ObjectStorage,
     key_service: EnvelopeKeyService,
+    tenant_id: string,
   ): Promise<Buffer | undefined> {
     const exists = await storage.exists(DEK_META_KEY);
     if (!exists) return undefined;
     const wrapped = await storage.get(DEK_META_KEY);
-    return key_service.unwrap_dek(wrapped);
+    return key_service.unwrap_dek(wrapped, tenant_id);
   }
 }

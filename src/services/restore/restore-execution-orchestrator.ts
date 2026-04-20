@@ -19,6 +19,12 @@ import type { RestoreProgressDashboard } from '@/services/restore/restore-progre
 import { calc_rate } from '@/services/shared/progress-rate';
 import { logger } from '@/utils/logger';
 
+export interface EntryRestoreOutcome {
+  readonly att_restored: number;
+  readonly att_skipped: number;
+  readonly att_errors: string[];
+}
+
 /** Decrypts, sanitizes, creates one message via Graph, then uploads attachments. */
 export async function restore_one_entry(
   ctx: TenantContext,
@@ -27,7 +33,7 @@ export async function restore_one_entry(
   mailbox_id: string,
   target_folder_id: string,
   entry: ManifestEntry,
-): Promise<{ att: number }> {
+): Promise<EntryRestoreOutcome> {
   const json = await decrypt_and_parse_message(ctx, entry);
   const sanitized = sanitize_message_for_restore(json);
   const new_msg_id = await restore_connector.create_message(
@@ -37,7 +43,6 @@ export async function restore_one_entry(
     sanitized,
   );
 
-  let att = 0;
   if (entry.attachments && entry.attachments.length > 0) {
     const result = await restore_entry_attachments(
       ctx,
@@ -47,10 +52,22 @@ export async function restore_one_entry(
       new_msg_id,
       entry.attachments,
     );
-    att = result.restored;
+    return {
+      att_restored: result.restored,
+      att_skipped: result.skipped,
+      att_errors: result.errors,
+    };
   }
 
-  return { att };
+  return { att_restored: 0, att_skipped: 0, att_errors: [] };
+}
+
+export interface FolderRestoreOutcome {
+  readonly restored: number;
+  readonly attachments: number;
+  readonly attachment_errors: number;
+  readonly errors: string[];
+  readonly att_error_details: string[];
 }
 
 /** Restores all entries for a single folder, updating dashboard per-message. */
@@ -67,16 +84,18 @@ export async function restore_folder_entries(
   start: number,
   dashboard: RestoreProgressDashboard,
   is_interrupted: () => boolean,
-): Promise<{ restored: number; attachments: number; errors: string[] }> {
+): Promise<FolderRestoreOutcome> {
   let restored = 0;
   let attachments = 0;
+  let attachment_errors = 0;
   const errors: string[] = [];
+  const att_error_details: string[] = [];
 
   for (const entry of entries) {
     if (is_interrupted()) break;
 
     try {
-      const { att } = await restore_one_entry(
+      const outcome = await restore_one_entry(
         ctx,
         restore_connector,
         tenant_id,
@@ -85,7 +104,9 @@ export async function restore_folder_entries(
         entry,
       );
       restored++;
-      attachments += att;
+      attachments += outcome.att_restored;
+      attachment_errors += outcome.att_errors.length;
+      att_error_details.push(...outcome.att_errors);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${entry.object_id}: ${msg}`);
@@ -98,7 +119,7 @@ export async function restore_folder_entries(
     dashboard.update_total(gp, global_total, rate, eta);
   }
 
-  return { restored, attachments, errors };
+  return { restored, attachments, attachment_errors, errors, att_error_details };
 }
 
 /** Restores a single message with its attachments. No dashboard needed. */
@@ -137,6 +158,9 @@ export async function restore_single_message(
   );
 
   let att_count = 0;
+  let att_error_count = 0;
+  const att_errors: string[] = [];
+
   if (entry.attachments && entry.attachments.length > 0) {
     const att_result = await restore_entry_attachments(
       ctx,
@@ -147,15 +171,25 @@ export async function restore_single_message(
       entry.attachments,
     );
     att_count = att_result.restored;
+    att_error_count = att_result.errors.length;
+    att_errors.push(...att_result.errors);
   }
 
   logger.success(`Restored 1 message${att_count > 0 ? ` + ${att_count} attachments` : ''}`);
+  if (att_error_count > 0) {
+    logger.warn(`${att_error_count} attachment(s) failed for restored message`);
+  }
+
   return {
     snapshot_id,
     restored_count: 1,
     attachment_count: att_count,
     error_count: 0,
+    attachment_error_count: att_error_count,
+    verification_failures: 0,
     errors: [],
+    attachment_errors: att_errors,
+    verification_warnings: [],
     restore_folder_name: root.display_name,
   };
 }
@@ -173,6 +207,13 @@ export async function backfill_missing_folder_ids(
     const json = await decrypt_and_parse_message(ctx, entry);
     const fid = extract_folder_id_from_json(json);
     (entry as { folder_id?: string }).folder_id = fid;
+  }
+
+  const still_unknown = entries.filter((e) => e.folder_id === '__unknown__').length;
+  if (still_unknown > 0) {
+    logger.warn(
+      `${still_unknown} message(s) have no folder information and will be restored to "Unknown".`,
+    );
   }
 }
 

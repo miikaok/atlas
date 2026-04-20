@@ -1,27 +1,33 @@
-import { scryptSync, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { DEFAULT_KDF_STRATEGY, KDF_STRATEGIES } from '@/adapters/keystore/kdf-strategy';
+import { parse_dek_blob, build_header_bytes } from '@/adapters/keystore/dek-blob-codec';
+import type { DekBlobHeader } from '@/adapters/keystore/dek-blob-codec';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
-const SCRYPT_N = 16384;
-const SCRYPT_R = 8;
-const SCRYPT_P = 1;
 
 /**
  * Envelope encryption using AES-256-GCM.
  *
- * - A master passphrase + tenant_id derive a unique KEK per tenant (scrypt).
+ * - A master passphrase derives a KEK per wrap via a registered KDF strategy (scrypt v1).
  * - A random DEK is generated per tenant, encrypted ("wrapped") with the KEK.
+ * - Wrapped DEK format is versioned; see `docs/security.md`.
  * - All tenant data is encrypted with the DEK.
- *
- * Encrypted format: [12-byte IV] [16-byte auth tag] [ciphertext]
  */
 export class EnvelopeKeyService {
-  private readonly _kek: Buffer;
+  // Stored as a Buffer so it can be zeroed via destroy(). The caller-side JS
+  // string is unavoidable in Node.js but is short-lived (scoped to create()).
+  private _passphrase_buf: Buffer;
 
-  constructor(passphrase: string, tenant_id: string) {
-    this._kek = derive_kek(passphrase, tenant_id);
+  constructor(passphrase: string) {
+    this._passphrase_buf = Buffer.from(passphrase, 'utf-8');
+  }
+
+  /** Zeros the passphrase buffer. Call after the DEK has been loaded/created. */
+  destroy(): void {
+    this._passphrase_buf.fill(0);
   }
 
   /** Encrypts plaintext using the given DEK. */
@@ -39,40 +45,41 @@ export class EnvelopeKeyService {
     return randomBytes(KEY_LENGTH);
   }
 
-  /** Encrypts (wraps) a DEK with this tenant's KEK. */
-  wrap_dek(dek: Buffer): Buffer {
-    return aes_gcm_encrypt(dek, this._kek);
+  /** Encrypts (wraps) a DEK with a KEK derived from the passphrase, tenant_id, and random salt. */
+  wrap_dek(dek: Buffer, tenant_id: string): Buffer {
+    const strategy = DEFAULT_KDF_STRATEGY;
+    const params = strategy.generate_params(this._passphrase_buf.length);
+    const header: DekBlobHeader = { kdf_id: strategy.kdf_id, kdf_params: params };
+    const header_bytes = build_header_bytes(header);
+    const kek = strategy.derive_kek(this._passphrase_buf, params, tenant_id);
+    const encrypted = aes_gcm_encrypt(dek, kek, header_bytes);
+    return Buffer.concat([header_bytes, encrypted]);
   }
 
-  /** Decrypts (unwraps) a wrapped DEK with this tenant's KEK. */
-  unwrap_dek(wrapped: Buffer): Buffer {
-    return aes_gcm_decrypt(wrapped, this._kek);
+  /** Decrypts (unwraps) a wrapped DEK using the passphrase, tenant_id, and blob metadata. */
+  unwrap_dek(wrapped: Buffer, tenant_id: string): Buffer {
+    const { header, header_bytes, encrypted_dek } = parse_dek_blob(wrapped);
+    const strategy = KDF_STRATEGIES.get(header.kdf_id);
+    if (!strategy) {
+      throw new Error(`Unknown KDF id in wrapped DEK: ${header.kdf_id}`);
+    }
+    const kek = strategy.derive_kek(this._passphrase_buf, header.kdf_params, tenant_id);
+    return aes_gcm_decrypt(encrypted_dek, kek, header_bytes);
   }
-}
-
-/**
- * Derives a 256-bit key encryption key from a passphrase and tenant_id salt
- * using scrypt (N=65536, r=8, p=1).
- */
-export function derive_kek(passphrase: string, tenant_id: string): Buffer {
-  return scryptSync(passphrase, tenant_id, KEY_LENGTH, {
-    N: SCRYPT_N,
-    r: SCRYPT_R,
-    p: SCRYPT_P,
-  });
 }
 
 /** AES-256-GCM encrypt. Returns: [IV (12)] [auth tag (16)] [ciphertext]. */
-function aes_gcm_encrypt(plaintext: Buffer, key: Buffer): Buffer {
+function aes_gcm_encrypt(plaintext: Buffer, key: Buffer, aad?: Buffer): Buffer {
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+  if (aad) cipher.setAAD(aad);
   const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
   const tag = cipher.getAuthTag();
   return Buffer.concat([iv, tag, encrypted]);
 }
 
 /** AES-256-GCM decrypt. Expects format: [IV (12)] [auth tag (16)] [ciphertext]. */
-function aes_gcm_decrypt(blob: Buffer, key: Buffer): Buffer {
+function aes_gcm_decrypt(blob: Buffer, key: Buffer, aad?: Buffer): Buffer {
   if (blob.length < IV_LENGTH + AUTH_TAG_LENGTH) {
     throw new Error('Ciphertext too short to contain IV and auth tag');
   }
@@ -83,5 +90,6 @@ function aes_gcm_decrypt(blob: Buffer, key: Buffer): Buffer {
 
   const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(tag);
+  if (aad) decipher.setAAD(aad);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }

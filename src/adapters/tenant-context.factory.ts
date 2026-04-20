@@ -5,7 +5,11 @@ import { S3ObjectStorage } from '@/adapters/storage-s3/s3-object-storage.adapter
 import { ensure_bucket_exists } from '@/adapters/storage-s3/s3-bucket-manager';
 import { tenant_bucket_name } from '@/adapters/storage-s3/tenant-bucket-name';
 import { EnvelopeKeyService } from '@/adapters/keystore/envelope-key-service.adapter';
-import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context.port';
+import type {
+  TenantContext,
+  TenantContextFactory,
+  TenantStorageContext,
+} from '@/ports/tenant/context.port';
 import type { AtlasConfig } from '@/utils/config';
 import { ATLAS_CONFIG_TOKEN } from '@/utils/config';
 import { logger } from '@/utils/logger';
@@ -19,6 +23,16 @@ export class DefaultTenantContextFactory implements TenantContextFactory {
     @inject(ATLAS_CONFIG_TOKEN) private readonly _config: AtlasConfig,
   ) {}
 
+  /** @inheritdoc */
+  async create_storage_only(tenant_id: string): Promise<TenantStorageContext> {
+    const bucket = tenant_bucket_name(tenant_id);
+    await ensure_bucket_exists(this._s3, bucket);
+    return {
+      tenant_id,
+      storage: new S3ObjectStorage(this._s3, bucket),
+    };
+  }
+
   /**
    * Initializes a tenant's infrastructure and returns a scoped context:
    *   1. Ensures the per-tenant bucket exists
@@ -26,11 +40,9 @@ export class DefaultTenantContextFactory implements TenantContextFactory {
    *   3. Returns storage + encrypt/decrypt bound to that tenant
    */
   async create(tenant_id: string): Promise<TenantContext> {
-    const bucket = tenant_bucket_name(tenant_id);
-    await ensure_bucket_exists(this._s3, bucket);
+    const { storage } = await this.create_storage_only(tenant_id);
 
-    const storage = new S3ObjectStorage(this._s3, bucket);
-    const key_service = new EnvelopeKeyService(this._config.encryption_passphrase, tenant_id);
+    const key_service = new EnvelopeKeyService(this._config.encryption_passphrase);
     const dek = await this.load_or_create_dek(storage, key_service, tenant_id);
 
     return {
@@ -38,6 +50,7 @@ export class DefaultTenantContextFactory implements TenantContextFactory {
       storage,
       encrypt: (data: Buffer): Buffer => key_service.encrypt(data, dek),
       decrypt: (data: Buffer): Buffer => key_service.decrypt(data, dek),
+      destroy: (): void => key_service.destroy(),
     };
   }
 
@@ -55,12 +68,12 @@ export class DefaultTenantContextFactory implements TenantContextFactory {
 
     if (dek_exists) {
       const wrapped = await storage.get(DEK_META_KEY);
-      return key_service.unwrap_dek(wrapped);
+      return key_service.unwrap_dek(wrapped, tenant_id);
     }
 
     logger.info(`Generating new encryption key for tenant ${tenant_id}`);
     const dek = key_service.generate_dek();
-    const wrapped = key_service.wrap_dek(dek);
+    const wrapped = key_service.wrap_dek(dek, tenant_id);
     await storage.put(DEK_META_KEY, wrapped);
     return dek;
   }

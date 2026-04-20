@@ -5,7 +5,7 @@ Each tenant gets its own S3 bucket named `atlas-{tenant_id}`:
 ```
 atlas-{tenant_id}/
 ├── _meta/
-│   └── dek.enc                         # wrapped DEK (encrypted with KEK)
+│   └── dek.enc                         # versioned wrapped DEK (KEK from scrypt + random salt; see security.md)
 ├── data/
 │   └── {mailbox_id}/
 │       ├── {sha256_a}                  # encrypted message (content-addressed)
@@ -37,7 +37,7 @@ For managed service providers backing up multiple tenants, this isolation means 
 
 ### The `_meta/dek.enc` Object
 
-This is the single most important object in the entire bucket. It contains the **Data Encryption Key (DEK)** wrapped (encrypted) with the KEK derived from your passphrase. Without this file:
+This is the single most important object in the entire bucket. It contains the **Data Encryption Key (DEK)** wrapped (encrypted) with a KEK derived from your passphrase and KDF parameters stored in the blob header. Without this file:
 
 - No message can be decrypted
 - No manifest can be read

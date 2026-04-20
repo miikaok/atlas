@@ -46,7 +46,10 @@ function validate_restore_options(options: CliRestoreOptions): void {
     process.exit(1);
   }
   if (options.snapshot && options.mailbox && !options.target) {
-    // When both -s and -m given, -m acts as target override (legacy behavior)
+    logger.error(
+      'When using both --snapshot and --mailbox, use --target to specify the restore destination.',
+    );
+    process.exit(1);
   }
   if ((options.startDate || options.endDate) && options.snapshot && !options.mailbox) {
     logger.error('--start-date / --end-date can only be used with --mailbox (-m).');
@@ -79,16 +82,11 @@ async function execute_restore(container: Container, options: CliRestoreOptions)
   logger.banner('Atlas Restore');
   logger.info(`Tenant:  ${tenant_id}`);
 
-  if (options.snapshot && !options.mailbox) {
+  if (options.snapshot) {
     return execute_snapshot_restore(restore_service, tenant_id, options);
   }
 
-  if (options.mailbox && !options.snapshot) {
-    return execute_mailbox_restore(restore_service, tenant_id, options);
-  }
-
-  // Both -s and -m: legacy behavior where -m is target override
-  return execute_snapshot_restore(restore_service, tenant_id, options);
+  return execute_mailbox_restore(restore_service, tenant_id, options);
 }
 
 /** Snapshot-mode restore: restore from a single snapshot. */
@@ -100,12 +98,12 @@ async function execute_snapshot_restore(
   logger.info(`Snapshot: ${chalk.cyan(options.snapshot!)}`);
   if (options.folder) logger.info(`Folder filter: ${chalk.cyan(options.folder)}`);
   if (options.message) logger.info(`Message: ${chalk.cyan(options.message)}`);
-  if (options.mailbox) logger.info(`Target mailbox: ${chalk.cyan(options.mailbox)}`);
+  if (options.target) logger.info(`Target mailbox: ${chalk.cyan(options.target)}`);
 
   const restore_options: RestoreOptions = {
     ...(options.folder && { folder_name: options.folder }),
     ...(options.message && { message_ref: options.message }),
-    ...(options.mailbox && { target_mailbox: options.mailbox }),
+    ...(options.target && { target_mailbox: options.target }),
   };
 
   const result = await service.restore_snapshot(tenant_id, options.snapshot!, restore_options);
@@ -147,7 +145,14 @@ function report_restore_result(result: RestoreResult): void {
       ? ` + ${chalk.cyan(String(result.attachment_count))} attachments`
       : '';
 
-  if (result.error_count === 0) {
+  for (const w of result.verification_warnings) {
+    logger.warn(`Post-restore verification: ${w}`);
+  }
+  if (result.verification_failures > 0) process.exitCode = 1;
+
+  const has_errors = result.error_count > 0 || result.attachment_error_count > 0;
+
+  if (!has_errors && result.verification_failures === 0) {
     logger.success(
       `Restored ${chalk.green(String(result.restored_count))} messages${att_info}` +
         (result.restore_folder_name ? ` into ${chalk.cyan(result.restore_folder_name)}` : ''),
@@ -155,15 +160,26 @@ function report_restore_result(result: RestoreResult): void {
     return;
   }
 
-  logger.warn(
-    `Restored ${result.restored_count} messages with ` +
-      `${chalk.yellow(String(result.error_count))} errors`,
-  );
+  if (!has_errors) return;
+
+  const parts: string[] = [];
+  if (result.error_count > 0) parts.push(`${result.error_count} message errors`);
+  if (result.attachment_error_count > 0) {
+    parts.push(`${result.attachment_error_count} attachment errors`);
+  }
+
+  logger.warn(`Restored ${result.restored_count} messages with ${chalk.yellow(parts.join(', '))}`);
   for (const err of result.errors.slice(0, 10)) {
     logger.error(`  - ${err}`);
   }
   if (result.errors.length > 10) {
     logger.error(`  ... and ${result.errors.length - 10} more`);
+  }
+  for (const err of result.attachment_errors.slice(0, 5)) {
+    logger.warn(`  [att] ${err}`);
+  }
+  if (result.attachment_errors.length > 5) {
+    logger.warn(`  ... and ${result.attachment_errors.length - 5} more attachment errors`);
   }
   process.exitCode = 1;
 }

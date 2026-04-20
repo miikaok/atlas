@@ -51,6 +51,7 @@ function make_mock_context(): TenantContext {
     storage: make_mock_storage(),
     encrypt: vi.fn((data: Buffer) => Buffer.concat([Buffer.from('E'), data])),
     decrypt: vi.fn((data: Buffer) => data.subarray(1)),
+    destroy: vi.fn(),
   };
 }
 
@@ -72,6 +73,10 @@ describe('CatalogService', () => {
 
     const mock_factory: TenantContextFactory = {
       create: vi.fn().mockResolvedValue(mock_context),
+      create_storage_only: vi.fn().mockImplementation(async (tid: string) => ({
+        tenant_id: tid,
+        storage: mock_context.storage,
+      })),
     };
 
     container = new Container();
@@ -285,6 +290,27 @@ describe('CatalogService', () => {
 
       const result = await service.read_message('t', 'snap-1', 'no-such-msg');
       expect(result).toBeUndefined();
+    });
+
+    it('resolves message by 1-based index from atlas list output', async () => {
+      const message_json = { subject: 'Second' };
+      const plaintext = Buffer.from(JSON.stringify(message_json));
+      const ciphertext = Buffer.concat([Buffer.from('E'), plaintext]);
+
+      vi.mocked(mock_manifests.find_by_snapshot).mockResolvedValue(
+        make_manifest({
+          entries: [
+            { object_id: 'first', storage_key: 'data/k1', checksum: 'a', size_bytes: 1 },
+            { object_id: 'second', storage_key: 'data/k2', checksum: 'b', size_bytes: 1 },
+          ],
+        }),
+      );
+      vi.mocked(mock_context.storage.get as ReturnType<typeof vi.fn>).mockResolvedValue(ciphertext);
+
+      const result = await service.read_message('t', 'snap-1', '2');
+
+      expect(result?.message).toEqual(message_json);
+      expect(mock_context.storage.get).toHaveBeenCalledWith('data/k2');
     });
   });
 });

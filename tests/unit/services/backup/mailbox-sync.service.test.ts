@@ -69,6 +69,7 @@ function make_mock_context(storage?: ObjectStorage): TenantContext {
     storage: s,
     encrypt: vi.fn((data: Buffer) => Buffer.concat([Buffer.from('E'), data])),
     decrypt: vi.fn((data: Buffer) => data.subarray(1)),
+    destroy: vi.fn(),
   };
 }
 
@@ -101,6 +102,10 @@ describe('MailboxSyncService', () => {
 
     mock_factory = {
       create: vi.fn().mockResolvedValue(mock_context),
+      create_storage_only: vi.fn().mockImplementation(async (tid: string) => ({
+        tenant_id: tid,
+        storage: mock_context.storage,
+      })),
     };
 
     container = new Container();

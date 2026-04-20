@@ -14,11 +14,13 @@ import type { TenantContext, TenantContextFactory } from '@/ports/tenant/context
 import type { RestoreConnector } from '@/ports/restore/connector.port';
 import type { Manifest, ManifestEntry } from '@/domain/manifest';
 
+const MSG_CHECKSUM = 'd1df863a768a7ba63b478c633a7e27ff636f03c5e33dca3117f869dc7a273a99';
+
 function make_entry(id: string, folder_id: string): ManifestEntry {
   return {
     object_id: id,
     storage_key: `data/user/${id}`,
-    checksum: id,
+    checksum: MSG_CHECKSUM,
     size_bytes: 100,
     subject: `Subject ${id}`,
     folder_id,
@@ -73,6 +75,7 @@ describe('RestoreService', () => {
       },
       encrypt: vi.fn(),
       decrypt: vi.fn((data: Buffer) => data.subarray(1)),
+      destroy: vi.fn(),
     };
 
     mock_manifests = {
@@ -106,14 +109,18 @@ describe('RestoreService', () => {
       add_attachment: vi.fn(),
       create_upload_session: vi.fn(),
       upload_attachment_chunk: vi.fn(),
-      count_folder_messages: vi.fn().mockResolvedValue(0),
+      count_folder_messages: vi.fn().mockResolvedValue(1000),
       list_folder_messages: vi.fn().mockResolvedValue([]),
     };
 
     container = new Container();
     container.bind(TENANT_CONTEXT_FACTORY_TOKEN).toConstantValue({
       create: vi.fn().mockResolvedValue(mock_context),
-    } as unknown as TenantContextFactory);
+      create_storage_only: vi.fn().mockImplementation(async (tid: string) => ({
+        tenant_id: tid,
+        storage: mock_context.storage,
+      })),
+    } satisfies TenantContextFactory);
     container.bind(MANIFEST_REPOSITORY_TOKEN).toConstantValue(mock_manifests);
     container.bind(MAILBOX_CONNECTOR_TOKEN).toConstantValue(mock_connector);
     container.bind(RESTORE_CONNECTOR_TOKEN).toConstantValue(mock_restore);
@@ -200,7 +207,7 @@ describe('RestoreService', () => {
           content_type: 'application/pdf',
           size_bytes: 512,
           storage_key: 'attachments/user/hash1',
-          checksum: 'hash1',
+          checksum: MSG_CHECKSUM,
           is_inline: false,
         },
       ],
@@ -311,5 +318,28 @@ describe('RestoreService', () => {
         expect.any(String),
       );
     });
+  });
+
+  it('includes attachment_error_count and verification_failures in result', async () => {
+    const entries = [make_entry('msg-1', 'f1')];
+    const manifest = make_manifest(entries);
+    (mock_manifests.find_by_snapshot as ReturnType<typeof vi.fn>).mockResolvedValue(manifest);
+
+    const result = await service.restore_snapshot('test-tenant', 'snap-1');
+
+    expect(result.attachment_error_count).toBe(0);
+    expect(result.verification_failures).toBe(0);
+    expect(mock_restore.count_folder_messages).toHaveBeenCalled();
+  });
+
+  it('propagates verification_failures when count mismatch detected', async () => {
+    const entries = [make_entry('msg-1', 'f1')];
+    const manifest = make_manifest(entries);
+    (mock_manifests.find_by_snapshot as ReturnType<typeof vi.fn>).mockResolvedValue(manifest);
+    (mock_restore.count_folder_messages as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+
+    const result = await service.restore_snapshot('test-tenant', 'snap-1');
+
+    expect(result.verification_failures).toBe(1);
   });
 });

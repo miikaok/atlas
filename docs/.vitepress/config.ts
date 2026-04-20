@@ -35,10 +35,21 @@ export default defineConfig({
         text: 'Guide',
         items: [
           { text: 'Getting Started', link: '/getting-started' },
-          { text: 'Self-Hosting', link: '/self-hosting' },
+          {
+            text: 'Self-Hosting',
+            collapsed: false,
+            items: [
+              { text: 'Overview', link: '/self-hosting/' },
+              { text: 'Storage Setup', link: '/self-hosting/storage' },
+              { text: 'Scheduling & Bandwidth', link: '/self-hosting/scheduling' },
+              { text: 'Replication Setup', link: '/self-hosting/replication' },
+            ],
+          },
           { text: 'Configuration', link: '/configuration' },
           { text: 'Azure AD Setup', link: '/azure-ad-setup' },
           { text: 'Security', link: '/security' },
+          { text: 'Concepts', link: '/concepts' },
+          { text: 'Troubleshooting', link: '/troubleshooting' },
         ],
       },
       {
@@ -54,9 +65,22 @@ export default defineConfig({
         text: 'Reference',
         items: [
           { text: 'CLI Commands', link: '/reference/cli' },
+          { text: 'CLI — Recovery & Management', link: '/reference/cli-recovery' },
           { text: 'Programmatic SDK', link: '/reference/sdk' },
-          { text: 'SDK Examples', link: '/reference/examples' },
+          {
+            text: 'Examples',
+            collapsed: false,
+            items: [
+              { text: 'Backup Patterns', link: '/reference/examples/backup' },
+              { text: 'Maintenance & Monitoring', link: '/reference/examples/maintenance' },
+              { text: 'Export & Compliance', link: '/reference/examples/export' },
+            ],
+          },
         ],
+      },
+      {
+        text: 'Project',
+        items: [{ text: 'Roadmap', link: '/roadmap' }],
       },
     ],
 
