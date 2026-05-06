@@ -1,0 +1,26 @@
+import { type Container } from 'inversify';
+import {
+  CATALOG_USE_CASE_TOKEN,
+  DELETION_USE_CASE_TOKEN,
+  VERIFICATION_USE_CASE_TOKEN,
+  STATS_USE_CASE_TOKEN,
+  REPLICATION_USE_CASE_TOKEN,
+} from '@atlas/types';
+import { CatalogService } from '@/services/catalog/catalog.service';
+import { DeletionService } from '@/services/deletion/deletion.service';
+import { VerificationService } from '@/services/verification/verification.service';
+import { StatsService } from '@/services/stats/stats.service';
+import { ReplicationService } from '@/services/replication/replication.service';
+
+export function bind_core_services(container: Container): void {
+  container.bind(CatalogService).toSelf();
+  container.bind(CATALOG_USE_CASE_TOKEN).toService(CatalogService);
+  container.bind(DeletionService).toSelf();
+  container.bind(DELETION_USE_CASE_TOKEN).toService(DeletionService);
+  container.bind(VerificationService).toSelf();
+  container.bind(VERIFICATION_USE_CASE_TOKEN).toService(VerificationService);
+  container.bind(StatsService).toSelf();
+  container.bind(STATS_USE_CASE_TOKEN).toService(StatsService);
+  container.bind(ReplicationService).toSelf();
+  container.bind(REPLICATION_USE_CASE_TOKEN).toService(ReplicationService);
+}

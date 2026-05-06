@@ -1,0 +1,30 @@
+{
+  "name": "@atlas/onedrive",
+  "version": "1.2.3",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src/ tests/",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "dependencies": {
+    "@atlas/types": "workspace:*",
+    "@atlas/core": "workspace:*",
+    "@atlas/m365-graph": "workspace:*",
+    "inversify": "^7.11.0",
+    "reflect-metadata": "^0.2.2"
+  }
+}

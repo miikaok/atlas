@@ -12,3 +12,5 @@ docs/.vitepress/cache/
 
 *.tsbuildinfo
 *.log
+
+.turbo/
