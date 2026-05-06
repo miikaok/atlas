@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "build": "tsc --project tsconfig.json",
+    "build": "tsc --project tsconfig.json && tsc-alias --project tsconfig.json -f",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint src/ tests/",

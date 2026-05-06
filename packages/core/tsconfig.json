@@ -5,9 +5,7 @@
     "outDir": "./dist",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@atlas/types": ["../types/src/index.ts"],
-      "@atlas/types/*": ["../types/src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],

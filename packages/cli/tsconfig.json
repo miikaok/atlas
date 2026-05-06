@@ -5,17 +5,7 @@
     "outDir": "./dist",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@atlas/types": ["../types/src/index.ts"],
-      "@atlas/types/*": ["../types/src/*"],
-      "@atlas/core": ["../core/src/index.ts"],
-      "@atlas/core/*": ["../core/src/*"],
-      "@atlas/m365-graph": ["../m365-graph/src/index.ts"],
-      "@atlas/m365-graph/*": ["../m365-graph/src/*"],
-      "@atlas/s3": ["../s3/src/index.ts"],
-      "@atlas/s3/*": ["../s3/src/*"],
-      "@atlas/outlook": ["../outlook/src/index.ts"],
-      "@atlas/outlook/*": ["../outlook/src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],

@@ -1,4 +1,5 @@
 packages/
+tools/
 docker/
 docs/
 .cursor/

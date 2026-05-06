@@ -48,6 +48,7 @@ export default defineConfig({
           { text: 'Delta Sync', link: '/operations/delta-sync' },
           { text: 'Storage Layout', link: '/operations/storage-layout' },
           { text: 'Replication', link: '/operations/replication' },
+          { text: 'Performance Profiling', link: '/operations/performance-profiling' },
         ],
       },
       {
