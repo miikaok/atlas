@@ -43,17 +43,21 @@ function resolve_atlas_at_path_aliases(): Plugin {
   };
 }
 
+const types_src = resolve(root_dir, '../types/src');
+
 export default defineConfig({
   plugins: [resolve_atlas_at_path_aliases()],
   resolve: {
-    alias: {
-      '@atlas/types/testing/stub-tenant-create-cipher': resolve(
-        root_dir,
-        '../types/src/testing/stub-tenant-create-cipher.ts',
-      ),
-      '@atlas/types': resolve(root_dir, '../types/src/index.ts'),
-      '@atlas/core': resolve(root_dir, '../core/src/index.ts'),
-    },
+    alias: [
+      {
+        find: '@atlas/types/testing/stub-tenant-create-cipher',
+        replacement: resolve(types_src, 'testing/stub-tenant-create-cipher.ts'),
+      },
+      { find: /^@atlas\/types\/(.+)$/, replacement: `${types_src}/$1` },
+      { find: '@atlas/types', replacement: resolve(types_src, 'index.ts') },
+      { find: /^@atlas\/core\/(.+)$/, replacement: `${core_src}/$1` },
+      { find: '@atlas/core', replacement: resolve(core_src, 'index.ts') },
+    ],
   },
   test: {
     globals: true,
