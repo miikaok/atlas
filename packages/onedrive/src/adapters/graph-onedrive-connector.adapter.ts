@@ -21,6 +21,7 @@ import {
   rethrow_if_access_denied,
   throw_missing_permissions,
 } from '@/adapters/graph-onedrive-download-helpers';
+import { map_delta_item } from '@/adapters/graph-onedrive-delta-mapper';
 import { logger } from '@atlas/core/utils/logger';
 
 interface GraphCollectionResponse<T> {
@@ -34,18 +35,11 @@ interface GraphDriveRecord {
   name?: string;
 }
 
-interface GraphParentReference {
-  path?: string;
-}
-
 interface GraphDeltaDriveItem {
   id?: string;
   name?: string;
   size?: number;
-  webUrl?: string;
-  eTag?: string;
-  lastModifiedDateTime?: string;
-  parentReference?: GraphParentReference;
+  parentReference?: { path?: string };
   file?: Record<string, unknown>;
   folder?: Record<string, unknown>;
   '@removed'?: { reason: string };
@@ -70,10 +64,6 @@ const DRIVE_DELTA_SELECT_FIELDS = [
   'folder',
   '@microsoft.graph.downloadUrl',
 ].join(',');
-
-function normalize_path(raw: string): string {
-  return raw.normalize('NFC');
-}
 
 /** Microsoft Graph adapter for OneDrive delta sync and file download. */
 @injectable()
@@ -285,7 +275,7 @@ export class GraphOneDriveConnector implements OneDriveConnector {
     while (true) {
       for (const raw of page.value ?? []) {
         if (!raw.id) continue;
-        items.push(this.map_delta_item(raw, drive_id));
+        items.push(map_delta_item(raw, drive_id));
       }
 
       const next = page['@odata.nextLink'];
@@ -299,42 +289,5 @@ export class GraphOneDriveConnector implements OneDriveConnector {
     }
 
     return { drive_id, delta_link, items, reset_detected: reset_detected || Boolean(stale_cursor) };
-  }
-
-  private map_delta_item(raw: GraphDeltaDriveItem, drive_id: string): OneDriveDeltaItem {
-    const parent_path = normalize_path(this.extract_parent_path(raw.parentReference?.path));
-    const file_name = normalize_path(raw.name ?? '');
-    const is_deleted = Boolean(raw['@removed']);
-    const kind: 'file' | 'folder' = raw.file
-      ? 'file'
-      : raw.folder
-        ? 'folder'
-        : is_deleted
-          ? 'file'
-          : 'folder';
-    return {
-      item_id: raw.id!,
-      drive_id,
-      kind,
-      file_name,
-      parent_path,
-      size_bytes: raw.size ?? 0,
-      deleted: is_deleted,
-      ...(raw.webUrl ? { web_url: raw.webUrl } : {}),
-      ...(raw.eTag ? { etag: raw.eTag } : {}),
-      ...(raw.lastModifiedDateTime ? { last_modified_at: raw.lastModifiedDateTime } : {}),
-      ...(raw['@microsoft.graph.downloadUrl']
-        ? { download_url: raw['@microsoft.graph.downloadUrl'] }
-        : {}),
-    };
-  }
-
-  private extract_parent_path(raw_path: string | undefined): string {
-    if (!raw_path) return '/';
-    const marker = 'root:';
-    const marker_index = raw_path.indexOf(marker);
-    if (marker_index < 0) return raw_path;
-    const result = raw_path.slice(marker_index + marker.length);
-    return result.length === 0 ? '/' : result;
   }
 }
