@@ -1,8 +1,9 @@
 export { GraphOneDriveConnector } from './graph-onedrive-connector.adapter';
-export { fetch_file_chunks, CHUNK_SIZE_BYTES } from './graph-onedrive-chunk-fetcher';
 export {
+  fetch_file_chunks,
   download_file_chunked,
   compute_chunk_timeout_ms,
+  CHUNK_SIZE_BYTES,
   CHUNK_DOWNLOAD_THRESHOLD,
 } from './graph-onedrive-chunked-download';
 export { S3OneDriveManifestRepository } from './s3-onedrive-manifest-repository.adapter';

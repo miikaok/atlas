@@ -45,7 +45,7 @@ describe('validate_dek_match', () => {
   });
 
   it('passes when both sides have the same DEK', async () => {
-    const key_service = new EnvelopeKeyService(passphrase, tenant_id);
+    const key_service = await EnvelopeKeyService.create(passphrase, tenant_id);
     const dek = key_service.generate_dek();
     const wrapped = key_service.wrap_dek(dek);
 
@@ -59,7 +59,7 @@ describe('validate_dek_match', () => {
   });
 
   it('throws DekMismatchError when DEKs differ', async () => {
-    const key_service = new EnvelopeKeyService(passphrase, tenant_id);
+    const key_service = await EnvelopeKeyService.create(passphrase, tenant_id);
     const dek_a = key_service.generate_dek();
     const dek_b = key_service.generate_dek();
     const wrapped_a = key_service.wrap_dek(dek_a);

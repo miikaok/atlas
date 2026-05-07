@@ -1,7 +1,10 @@
+export type OneDriveRestoreConflictBehavior = 'replace' | 'rename' | 'fail';
+
 export interface OneDriveRestoreOptions {
   readonly snapshot_id: string;
   readonly target_owner_id?: string;
   readonly file_filter?: string[];
+  readonly conflict_behavior?: OneDriveRestoreConflictBehavior;
 }
 
 export interface OneDriveRestoreResult {

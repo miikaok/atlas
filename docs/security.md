@@ -8,7 +8,7 @@ Atlas uses **envelope encryption** to isolate tenants cryptographically. This pa
 Master passphrase (env var)
     |
     v
-scrypt(passphrase, tenant_id, N=16384, r=8, p=1)  -->  KEK (256-bit, per-tenant)
+scrypt(passphrase, tenant_id, N=32768, r=8, p=1)  -->  KEK (256-bit, per-tenant)
     |
     v
 KEK wraps/unwraps a random DEK (AES-256-GCM)
@@ -33,7 +33,7 @@ Parameters used by Atlas:
 
 | Parameter | Value | Purpose |
 | --- | --- | --- |
-| N (cost) | 16384 | CPU/memory cost factor (2^14 iterations) |
+| N (cost) | 32768 | CPU/memory cost factor (2^15 iterations, OWASP Interactive minimum) |
 | r (block size) | 8 | Memory usage multiplier |
 | p (parallelism) | 1 | Sequential derivation (no parallel lanes) |
 | Salt | `tenant_id` string | Ensures different KEKs per tenant |
@@ -81,9 +81,9 @@ Every encrypt operation generates a **fresh random 12-byte IV** (initialization 
 | OneDrive file blobs | Yes | Keys under `onedrive/data/{owner_id}/{sha256}` |
 | OneDrive manifests / indexes / delta state | Yes | Under `onedrive/manifests`, `onedrive/index`, `onedrive/_meta` |
 | Wrapped DEK | Yes | `_meta/dek.enc` is encrypted with the KEK |
-| S3 object metadata | **No** | `x-message-id`, `x-plaintext-sha256`, and OneDrive `x-onedrive-*` headers are visible to anyone with S3 read access |
+| S3 object metadata | **No** | `x-message-id` on mailbox objects is visible to anyone with S3 read access |
 
-The S3 object metadata is intentionally not encrypted because it is used for deduplication checks without requiring decryption. However, this means that **Graph message and file identifiers** and **plaintext SHA-256 hashes** are visible to anyone who can list or read S3 object metadata. The object bodies remain encrypted.
+Mailbox objects carry `x-message-id` in S3 metadata for operational diagnostics. OneDrive objects no longer store file identifiers, version identifiers, or plaintext checksums in unencrypted metadata -- all such metadata is stored inside encrypted manifests and version indexes.
 
 Manifests deserve special attention: they contain email subjects, folder display names, and Microsoft Graph delta URLs. All of this metadata is encrypted with the same DEK, so subject lines and folder names are never exposed at rest in the S3 bucket.
 
@@ -91,7 +91,7 @@ Manifests deserve special attention: they contain email subjects, folder display
 
 OneDrive file ciphertext uses keys such as `onedrive/data/{owner_id}/{sha256}` (see [OneDrive Backup](./onedrive-backup.md)). The `{owner_id}` segment is the **Entra object ID**, not an SMTP address, so bucket listings do not reveal which email account owns a subtree unless an attacker can correlate Graph IDs.
 
-Unencrypted S3 metadata on OneDrive objects mirrors the mailbox pattern: `x-onedrive-file-id`, `x-onedrive-version-id` (historical versions), and `x-plaintext-sha256` are visible to anyone who can read object metadata. Content remains AES-256-GCM encrypted.
+OneDrive data blobs carry no unencrypted S3 metadata. File identifiers, version identifiers, and plaintext checksums are stored exclusively inside encrypted manifests and version indexes, preventing known-plaintext fingerprinting via S3 `HeadObject`/`ListObjects` access.
 
 ## User identity in storage paths
 
@@ -158,3 +158,17 @@ Atlas writes a marker file (`_meta/replica.marker`) on each target during first 
 ### Replication Status Encryption
 
 Replication status sidecar files stored under `_meta/replication/` in the primary bucket are encrypted with the tenant DEK. Target endpoints, checksums, and error messages are not exposed at rest in S3.
+
+## Configuration File Security
+
+### Filesystem Permission Check
+
+`atlas.config.json` may contain `encryption_passphrase` and `client_secret` in plaintext. On Unix systems, Atlas checks the file's permissions at load time and logs a warning if the file is group- or world-readable (i.e., any bits in `0o077` are set):
+
+```
+WARN Config file /home/user/atlas.config.json has overly permissive permissions (mode 0644). Recommended: chmod 600 /home/user/atlas.config.json
+```
+
+This check is skipped on Windows where Unix permission bits do not apply. The check is advisory (warning, not error) to avoid breaking existing deployments, but operators are strongly encouraged to restrict config files to owner-only access (`chmod 600`).
+
+Environment variables (`ATLAS_*`) and `.env` files are an alternative that avoids storing secrets in a JSON file entirely.

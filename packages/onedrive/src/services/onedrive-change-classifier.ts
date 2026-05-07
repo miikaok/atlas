@@ -1,4 +1,5 @@
 import type { OneDriveChangeType, OneDriveDeltaItem } from '@atlas/types';
+import { logger } from '@atlas/core/utils/logger';
 
 /**
  * Determines the type of change for a delta item based on previous state.
@@ -21,11 +22,19 @@ export function classify_change_type(
   const etag_missing_transition =
     (Boolean(previous_etag) && !item.etag) || (!previous_etag && Boolean(item.etag));
   const etag_changed = Boolean(previous_etag && item.etag && previous_etag !== item.etag);
+  const previously_known = Boolean(previous_path || previous_name || previous_etag);
 
   if (!previous_path && !previous_name && !previous_etag) return 'created';
   if (etag_missing_transition) return 'updated';
   if (etag_changed) return 'updated';
+  if (path_changed && name_changed) return 'moved_and_renamed';
   if (path_changed) return 'moved';
   if (name_changed) return 'renamed';
+  if (previously_known && !previous_etag && !item.etag) {
+    logger.warn(
+      `OneDrive delta item ${item.item_id}: missing etag on prior and current snapshot; classifying as updated`,
+    );
+    return 'updated';
+  }
   return undefined;
 }

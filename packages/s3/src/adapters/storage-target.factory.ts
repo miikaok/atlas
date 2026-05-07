@@ -5,7 +5,7 @@ import type { TenantContext } from '@atlas/types';
 import { S3ObjectStorage } from '@/adapters/s3-object-storage.adapter';
 import { ensure_bucket_exists } from '@/adapters/s3-bucket-manager';
 import { tenant_bucket_name } from '@/adapters/tenant-bucket-name';
-import { EnvelopeKeyService } from '@atlas/core';
+import { EnvelopeKeyService, load_dek_with_migration } from '@atlas/core';
 
 const DEK_META_KEY = '_meta/dek.enc';
 
@@ -90,41 +90,41 @@ export class DefaultStorageTarget implements StorageTarget {
     await ensure_bucket_exists(this._client, bucket, true);
 
     const storage = new S3ObjectStorage(this._client, bucket);
-    const key_service = new EnvelopeKeyService(this._passphrase, tenant_id);
-    const dek = await this.try_load_dek(storage, key_service);
+    const has_dek = await storage.exists(DEK_META_KEY);
 
-    if (dek) {
+    if (has_dek) {
+      const { dek, key_service } = await load_dek_with_migration(
+        storage,
+        this._passphrase,
+        tenant_id,
+      );
       return {
         tenant_id,
         storage,
         encrypt: (data: Buffer): Buffer => key_service.encrypt(data, dek),
         decrypt: (data: Buffer): Buffer => key_service.decrypt(data, dek),
         create_cipher: () => key_service.create_encrypt_cipher(dek),
+        create_decipher: (iv: Buffer, auth_tag: Buffer) =>
+          key_service.create_decrypt_decipher(dek, iv, auth_tag),
       };
     }
 
+    const no_dek_msg = 'no DEK on target. Copy _meta/dek.enc first.';
     return {
       tenant_id,
       storage,
       encrypt: (): Buffer => {
-        throw new Error('Cannot encrypt: no DEK on target. Copy _meta/dek.enc first.');
+        throw new Error(`Cannot encrypt: ${no_dek_msg}`);
       },
       decrypt: (): Buffer => {
-        throw new Error('Cannot decrypt: no DEK on target. Copy _meta/dek.enc first.');
+        throw new Error(`Cannot decrypt: ${no_dek_msg}`);
       },
       create_cipher: (): ReturnType<EnvelopeKeyService['create_encrypt_cipher']> => {
-        throw new Error('Cannot create_cipher: no DEK on target. Copy _meta/dek.enc first.');
+        throw new Error(`Cannot create_cipher: ${no_dek_msg}`);
+      },
+      create_decipher: (): ReturnType<EnvelopeKeyService['create_decrypt_decipher']> => {
+        throw new Error(`Cannot create_decipher: ${no_dek_msg}`);
       },
     };
-  }
-
-  private async try_load_dek(
-    storage: S3ObjectStorage,
-    key_service: EnvelopeKeyService,
-  ): Promise<Buffer | undefined> {
-    const exists = await storage.exists(DEK_META_KEY);
-    if (!exists) return undefined;
-    const wrapped = await storage.get(DEK_META_KEY);
-    return key_service.unwrap_dek(wrapped);
   }
 }

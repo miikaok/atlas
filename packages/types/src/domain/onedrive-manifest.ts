@@ -1,4 +1,10 @@
-export type OneDriveChangeType = 'created' | 'updated' | 'moved' | 'renamed' | 'deleted';
+export type OneDriveChangeType =
+  | 'created'
+  | 'updated'
+  | 'moved'
+  | 'renamed'
+  | 'moved_and_renamed'
+  | 'deleted';
 
 export interface OneDriveSnapshotManifest {
   readonly id: string;
@@ -57,5 +63,6 @@ export interface OneDriveDeltaCursor {
   readonly previous_path_by_file_id: Record<string, string>;
   readonly previous_name_by_file_id: Record<string, string>;
   readonly previous_etag_by_file_id: Record<string, string>;
+  readonly previous_kind_by_file_id: Record<string, 'file' | 'folder'>;
   readonly updated_at: string;
 }

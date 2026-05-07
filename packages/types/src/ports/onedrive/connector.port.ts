@@ -73,6 +73,7 @@ export interface OneDriveConnector {
     parent_id: string,
     file_name: string,
     content: Buffer,
+    conflict_behavior?: string,
   ): Promise<void>;
 
   /** Uploads a large file via resumable upload session. */
@@ -83,5 +84,6 @@ export interface OneDriveConnector {
     parent_id: string,
     file_name: string,
     content: Buffer,
+    conflict_behavior?: string,
   ): Promise<void>;
 }

@@ -1,11 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EnvelopeKeyService } from '@atlas/core';
 import { create_storage_target } from '@/adapters/storage-target.factory';
 import type { StorageTargetConfig } from '@atlas/types';
 
-const ks = new EnvelopeKeyService('test-pass', 'tenant-1');
-const dek = ks.generate_dek();
-const wrapped_dek = ks.wrap_dek(dek);
+const { wrapped_dek } = vi.hoisted(() => {
+  const { scryptSync, randomBytes, createCipheriv } =
+    // Vitest hoists this factory above ESM imports; use CJS require for crypto.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('node:crypto') as typeof import('node:crypto');
+  const kek = scryptSync('test-pass', 'tenant-1', 32, {
+    N: 32768,
+    r: 8,
+    p: 1,
+    maxmem: 64 * 1024 * 1024,
+  });
+  const dek = randomBytes(32);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', kek, iv, { authTagLength: 16 });
+  const encrypted = Buffer.concat([cipher.update(dek), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return { wrapped_dek: Buffer.concat([iv, tag, encrypted]) };
+});
 
 let mock_exists_returns = true;
 vi.mock('@/adapters/s3-object-storage.adapter', () => ({

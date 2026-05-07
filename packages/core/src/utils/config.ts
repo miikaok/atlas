@@ -1,7 +1,8 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { config as load_dotenv } from 'dotenv';
+import { logger } from '@/utils/logger';
 
 export interface GraphConfig {
   readonly tenant_id: string;
@@ -74,6 +75,7 @@ export function try_load_config_file(): Partial<AtlasConfig> {
 
 /** Reads and JSON-parses a single config file. */
 function parse_config_file(file_path: string): Partial<AtlasConfig> {
+  warn_if_world_readable(file_path);
   const raw = readFileSync(file_path, 'utf-8');
   const parsed: unknown = JSON.parse(raw);
 
@@ -82,6 +84,24 @@ function parse_config_file(file_path: string): Partial<AtlasConfig> {
   }
 
   return parsed as Partial<AtlasConfig>;
+}
+
+/** Warns if a config file has group- or world-readable permissions (Unix only). */
+function warn_if_world_readable(file_path: string): void {
+  if (platform() === 'win32') return;
+  try {
+    const stat = statSync(file_path);
+    const other_bits = stat.mode & 0o077;
+    if (other_bits !== 0) {
+      const mode_str = `0${(stat.mode & 0o777).toString(8)}`;
+      logger.warn(
+        `Config file ${file_path} has overly permissive permissions (mode ${mode_str}). ` +
+          `Recommended: chmod 600 ${file_path}`,
+      );
+    }
+  } catch {
+    /* stat failure is non-fatal — config will fail at read anyway */
+  }
 }
 
 /**

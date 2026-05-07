@@ -1,4 +1,4 @@
-import type { CipherGCM } from 'node:crypto';
+import type { CipherGCM, DecipherGCM } from 'node:crypto';
 
 import type { ObjectStorage } from '@/ports/storage/object-storage.port';
 
@@ -21,6 +21,9 @@ export interface TenantCryptoContext {
    * the non-streaming {@link TenantCryptoContext.encrypt} envelope layout on read.
    */
   create_cipher(): { cipher: CipherGCM; iv: Buffer };
+
+  /** Creates a streaming AES-256-GCM decipher for the given IV and auth tag. */
+  create_decipher(iv: Buffer, auth_tag: Buffer): DecipherGCM;
 }
 
 /** Bundles tenant-scoped storage and encryption for a single tenant. */

@@ -57,14 +57,18 @@ Back up and verify OneDrive files per user using Graph delta sync. Blobs and man
 ```bash
 atlas onedrive backup -o user@company.com
 atlas onedrive backup -o user@company.com --full
+atlas onedrive restore -o user@company.com -s od-snap-1735689600000-a1b2c3
+atlas onedrive restore -o user@company.com -s od-snap-123 --target-owner other@company.com
+atlas onedrive restore -o user@company.com -s od-snap-123 --conflict replace
 atlas onedrive list-snapshots -o user@company.com
 atlas onedrive list-versions -o user@company.com -f "Documents/report.docx"
-atlas onedrive verify -s od-snap-1735689600000-a1b2c3
+atlas onedrive verify -o user@company.com -s od-snap-1735689600000-a1b2c3
 ```
 
 | Option | Description |
 | --- | --- |
 | `backup` | Incremental sync; use `--full` to ignore saved delta state |
+| `restore` | Restore files from a snapshot to the user's (or another user's) OneDrive |
 | `list-snapshots` | List snapshot IDs and timestamps for the owner |
 | `list-versions` | List indexed versions for one file (`-f` file ID or path) |
 | `verify` | Decrypt manifests/blobs for a snapshot and check SHA-256 + index rows |
@@ -75,6 +79,17 @@ atlas onedrive verify -s od-snap-1735689600000-a1b2c3
 | --- | --- |
 | `-o, --owner <id>` | User email or Entra object ID (required) |
 | `--full` | Force full crawl ignoring saved delta links |
+| `-t, --tenant <id>` | Override tenant ID from config |
+
+**`atlas onedrive restore`**
+
+| Option | Description |
+| --- | --- |
+| `-o, --owner <id>` | User email or Entra object ID (required) |
+| `-s, --snapshot <id>` | Snapshot to restore from (required) |
+| `--target-owner <id>` | Restore to a different user's OneDrive (defaults to owner) |
+| `--file-filter <paths...>` | Only restore specific files by ID or path |
+| `-c, --conflict <mode>` | File conflict policy: `replace`, `rename`, or `fail` (default: `rename`) |
 | `-t, --tenant <id>` | Override tenant ID from config |
 
 **`atlas onedrive list-snapshots`**
@@ -96,11 +111,12 @@ atlas onedrive verify -s od-snap-1735689600000-a1b2c3
 
 | Option | Description |
 | --- | --- |
+| `-o, --owner <id>` | User email or Entra object ID (required) |
 | `-s, --snapshot <id>` | OneDrive snapshot id (required) |
 | `-t, --tenant <id>` | Override tenant ID from config |
 
 ::: tip Permissions
-Application permissions `Files.Read.All` and `User.Read.All` are required in addition to the mailbox backup set. Details and storage layout are documented on the [OneDrive Backup](/onedrive-backup) page.
+Application permissions `Files.Read.All` and `User.Read.All` are required for backup and read operations; `Files.ReadWrite.All` is additionally required for restore. See Details and storage layout are documented on the [OneDrive Backup](/onedrive-backup) page.
 :::
 
 ## `atlas status`

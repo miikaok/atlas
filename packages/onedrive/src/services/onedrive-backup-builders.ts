@@ -79,6 +79,7 @@ export function build_empty_result(
   versions_stored: number,
   versions_unavailable: number,
   errors: string[],
+  warnings: string[],
   healthy: boolean,
 ): OneDriveBackupResult {
   return {
@@ -95,6 +96,7 @@ export function build_empty_result(
       versions_stored,
       versions_unavailable,
       errors,
+      warnings,
       healthy,
     },
   };

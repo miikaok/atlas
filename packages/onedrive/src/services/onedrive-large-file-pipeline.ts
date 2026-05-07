@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { fetch_file_chunks } from '@/adapters/graph-onedrive-chunk-fetcher';
+import { fetch_file_chunks } from '@/adapters/graph-onedrive-chunked-download';
 import {
   onedrive_data_key,
   onedrive_staging_key,
@@ -66,21 +66,21 @@ export async function process_large_file(
   const exists = await ctx.storage.exists(canonical_key);
 
   if (exists) {
-    await handle.abort();
+    await safe_abort(handle, onedrive_staging_prefix(owner_id), ctx);
     logger.info(`Deduplicated ${item.file_name} (already stored)`);
     return { checksum, storage_key: canonical_key, stored: false, deduplicated: true };
   }
 
   await handle.complete(completed_parts);
 
-  const metadata = {
-    'x-onedrive-file-id': item.item_id,
-    'x-plaintext-sha256': checksum,
-  };
-
   try {
-    await ctx.storage.copy(staging_key, canonical_key, metadata, object_lock_policy);
+    await ctx.storage.copy(staging_key, canonical_key, undefined, object_lock_policy);
   } catch (err) {
+    if (is_precondition_failed(err)) {
+      logger.info(`Concurrent writer stored ${item.file_name} first — dedup`);
+      await ctx.storage.delete(staging_key).catch(() => {});
+      return { checksum, storage_key: canonical_key, stored: false, deduplicated: true };
+    }
     logger.warn(`Copy staging->canonical failed, cleaning up: ${err}`);
     await ctx.storage.delete(staging_key).catch(() => {});
     throw err;
@@ -116,9 +116,7 @@ async function stream_encrypt_upload(
 ): Promise<StreamUploadResult> {
   const { cipher, iv } = ctx.create_cipher();
   const hash = createHash('sha256');
-  const handle = await ctx.storage.begin_multipart_upload(staging_key, {
-    'x-onedrive-file-id': item.item_id,
-  });
+  const handle = await ctx.storage.begin_multipart_upload(staging_key);
 
   try {
     const completed_parts: Array<{ ETag: string; PartNumber: number }> = [];
@@ -184,9 +182,30 @@ async function stream_encrypt_upload(
 
     return { checksum: hash.digest('hex'), handle, completed_parts };
   } catch (err) {
-    await handle.abort();
+    await safe_abort(handle, staging_key.substring(0, staging_key.lastIndexOf('/') + 1), ctx);
     throw err;
   }
+}
+
+async function safe_abort(
+  handle: MultipartUploadHandle,
+  staging_prefix: string,
+  ctx: TenantContext,
+): Promise<void> {
+  try {
+    await handle.abort();
+  } catch (err) {
+    logger.warn(`Multipart abort failed, cleaning up orphaned parts: ${err}`);
+    await ctx.storage.abort_incomplete_uploads(staging_prefix).catch(() => {});
+  }
+}
+
+function is_precondition_failed(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const code = (err as Record<string, unknown>).Code ?? (err as Record<string, unknown>).code;
+  if (code === 'PreconditionFailed') return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('PreconditionFailed') || message.includes('412');
 }
 
 function format_bytes(bytes: number): string {

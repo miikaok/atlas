@@ -153,11 +153,22 @@ export async function with_graph_retry<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Extracts the Retry-After header value (in ms) from a Graph error, if present. */
 function extract_retry_after(err: unknown): number | undefined {
-  const headers = (err as Record<string, unknown>).headers as Record<string, string> | undefined;
-  const value = headers?.['retry-after'] ?? headers?.['Retry-After'];
-  if (!value) return undefined;
-  const seconds = parseInt(value, 10);
-  return isNaN(seconds) ? undefined : seconds * 1000;
+  const graph_err = err as Record<string, unknown>;
+  const headers_sources = [
+    graph_err.headers as Record<string, string> | undefined,
+    graph_err.responseHeaders as Record<string, string> | undefined,
+    (graph_err.response as Record<string, unknown> | undefined)?.headers as
+      | Record<string, string>
+      | undefined,
+  ];
+  for (const headers of headers_sources) {
+    if (!headers) continue;
+    const value = headers['retry-after'] ?? headers['Retry-After'];
+    if (!value) continue;
+    const seconds = parseInt(value, 10);
+    if (!isNaN(seconds)) return seconds * 1000;
+  }
+  return undefined;
 }
 
 function describe_error(err: unknown): string {

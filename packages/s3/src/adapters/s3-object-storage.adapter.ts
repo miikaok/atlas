@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import {
-  S3ServiceException,
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
@@ -15,6 +14,7 @@ import {
 } from '@aws-sdk/client-s3';
 import type {
   ObjectStorage,
+  ObjectStorageEtagResult,
   MultipartUploadHandle,
   StorageImmutabilityProbeRequest,
   StorageImmutabilityProbeResult,
@@ -26,7 +26,13 @@ import {
   ObjectLockModeRejectedError,
   ObjectLockUnsupportedError,
   ObjectLockVersioningDisabledError,
+  PreconditionFailedError,
 } from '@/adapters/object-lock.errors';
+import {
+  build_s3_copy_source,
+  is_backend_mode_rejection,
+  is_precondition_failed,
+} from '@/adapters/s3-error-helpers';
 
 /**
  * S3-backed ObjectStorage scoped to a single bucket.
@@ -44,6 +50,7 @@ export class S3ObjectStorage implements ObjectStorage {
     data: Buffer,
     metadata?: Record<string, string>,
     object_lock_policy?: StorageObjectLockPolicy,
+    if_match?: string,
   ): Promise<void> {
     await this.validate_immutability_policy(object_lock_policy);
     const content_md5 = createHash('md5').update(data).digest('base64');
@@ -60,9 +67,11 @@ export class S3ObjectStorage implements ObjectStorage {
           ObjectLockRetainUntilDate: object_lock_policy?.retain_until
             ? new Date(object_lock_policy.retain_until)
             : undefined,
+          ...(if_match ? { IfMatch: if_match } : {}),
         }),
       );
     } catch (err) {
+      if (is_precondition_failed(err)) throw new PreconditionFailedError(key);
       if (is_backend_mode_rejection(err, object_lock_policy?.mode)) {
         throw new ObjectLockModeRejectedError(
           this._bucket,
@@ -91,6 +100,30 @@ export class S3ObjectStorage implements ObjectStorage {
     if (!stream) throw new Error(`Empty response body for key ${key}`);
 
     return Buffer.from(await stream.transformToByteArray());
+  }
+
+  /** Returns a readable stream for an object. */
+  async get_stream(key: string): Promise<NodeJS.ReadableStream> {
+    const response = await this._client.send(
+      new GetObjectCommand({ Bucket: this._bucket, Key: key }),
+    );
+    const stream = response.Body;
+    if (!stream) throw new Error(`Empty response body for key ${key}`);
+    return stream as unknown as NodeJS.ReadableStream;
+  }
+
+  /** Downloads an object along with its ETag for subsequent conditional writes. */
+  async get_with_etag(key: string): Promise<ObjectStorageEtagResult> {
+    const response = await this._client.send(
+      new GetObjectCommand({ Bucket: this._bucket, Key: key }),
+    );
+
+    const stream = response.Body;
+    if (!stream) throw new Error(`Empty response body for key ${key}`);
+
+    const data = Buffer.from(await stream.transformToByteArray());
+    const etag = response.ETag ?? '';
+    return { data, etag };
   }
 
   /** Removes a single object. */
@@ -293,29 +326,10 @@ export class S3ObjectStorage implements ObjectStorage {
 
   private async validate_immutability_policy(policy?: StorageObjectLockPolicy): Promise<void> {
     if (!policy || !policy.retain_until) return;
-    const probe = await this.probe_immutability({
-      mode: policy.mode,
-    });
+    const probe = await this.probe_immutability({ mode: policy.mode });
     if (!probe.versioning_enabled) throw new ObjectLockVersioningDisabledError(this._bucket);
     if (!probe.object_lock_enabled) throw new ObjectLockUnsupportedError(this._bucket);
     if (!probe.mode_supported)
       throw new ObjectLockModeRejectedError(this._bucket, policy.mode ?? 'UNKNOWN');
   }
-}
-
-/** Builds the CopySource value for same-bucket copy (key segments URI-encoded). */
-function build_s3_copy_source(bucket: string, key: string): string {
-  const encoded_key = key.split('/').map(encodeURIComponent).join('/');
-  return `${bucket}/${encoded_key}`;
-}
-
-function is_backend_mode_rejection(err: unknown, mode?: string): boolean {
-  if (!mode) return false;
-  if (!(err instanceof S3ServiceException)) return false;
-  const error_text = `${err.name} ${err.message}`.toLowerCase();
-  return (
-    error_text.includes('object lock') ||
-    error_text.includes('invalidrequest') ||
-    error_text.includes('invalidargument')
-  );
 }

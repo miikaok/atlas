@@ -14,6 +14,7 @@ export interface OneDriveBackupSummary {
   readonly versions_stored: number;
   readonly versions_unavailable: number;
   readonly errors: string[];
+  readonly warnings: string[];
   readonly healthy: boolean;
 }
 
@@ -62,6 +63,7 @@ export interface OneDriveVerificationUseCase {
   /** Verifies integrity of a OneDrive snapshot. */
   verify_onedrive_snapshot(
     tenant_id: string,
+    owner_id: string,
     snapshot_id: string,
   ): Promise<OneDriveVerificationResult>;
 }

@@ -18,14 +18,14 @@ atlas onedrive list-snapshots -o user@company.com
 atlas onedrive list-versions -o user@company.com -f "file-id-or-path"
 
 # Verify snapshot integrity
-atlas onedrive verify -s od-snap-1735689600000-a1b2c3
+atlas onedrive verify -o user@company.com -s od-snap-1735689600000-a1b2c3
 ```
 
 New snapshot IDs are generated as `od-snap-<milliseconds>-<6-hex>` (for example `od-snap-1735689600000-a1b2c3`). Use the value printed at the end of a successful backup or from `list-snapshots`.
 
 ## How It Works
 
-1. **Delta sync** -- For each drive, Atlas calls `GET /users/{owner_id}/drives/{drive_id}/root/delta` (or follows the stored OData `deltaLink`) to discover changed files since the last backup. Invalid or expired delta tokens trigger a full delta reset on the next attempt. Only changed, moved, renamed, or deleted file items are considered for the manifest.
+1. **Delta sync** -- For each drive, Atlas calls `GET /users/{owner_id}/drives/{drive_id}/root/delta` (or follows the stored OData `deltaLink`) to discover changed files since the last backup. Invalid or expired delta tokens trigger a full delta reset on the next attempt. If a single drive fails during a multi-drive backup, its delta link is not advanced and its entries are discarded from the snapshot manifest so the next run retries that drive cleanly. The delta cursor is saved incrementally after each successfully completed drive, reducing the replay window if the process crashes mid-backup. Only changed, moved, renamed, or deleted file items are considered for the manifest.
 2. **Content-addressed storage** -- Each file is SHA-256 hashed over the plaintext before encryption. If the same content already exists for that owner, the blob is deduplicated (no second upload).
 3. **Zero-disk streaming** -- Files at or above **512 MiB** use `fetch_file_chunks`: 4 MiB download segments are encrypted and assembled into **8 MiB** S3 multipart parts, staged under `onedrive/staging/`, then copied to the canonical `onedrive/data/` key or aborted if the content hash already exists. Peak working set is dominated by one download buffer plus one upload part (on the order of **12 MiB** per large file, not the full file size).
 4. **Version history** -- After the current version is processed, Atlas calls `GET /drives/{drive_id}/items/{item_id}/versions` and stores any new historical versions the same way as live content.
@@ -65,6 +65,7 @@ Mailbox backup currently keys `data/` and `manifests/` by the mailbox identifier
 | Command | Description |
 | --- | --- |
 | `atlas onedrive backup` | Back up changed files for one user |
+| `atlas onedrive restore` | Restore files from a snapshot |
 | `atlas onedrive list-snapshots` | List all snapshots for a user |
 | `atlas onedrive list-versions` | Show version history for a file |
 | `atlas onedrive verify` | Verify snapshot blob integrity |
@@ -76,6 +77,23 @@ Mailbox backup currently keys `data/` and `manifests/` by the mailbox identifier
 | `-o, --owner <id>` | User email or Entra object ID (required) | — |
 | `--full` | Force full crawl, ignore saved delta state | `false` |
 | `-t, --tenant <id>` | Tenant identifier | Config default |
+
+### `atlas onedrive restore`
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `-o, --owner <id>` | User email or Entra object ID (required) | — |
+| `-s, --snapshot <id>` | Snapshot to restore from (required) | — |
+| `--target-owner <id>` | Restore to a different user's OneDrive | Same as `--owner` |
+| `--file-filter <paths...>` | Only restore specific files (by ID or path) | All files |
+| `-c, --conflict <mode>` | File conflict policy: `replace`, `rename`, or `fail` | `rename` |
+| `-t, --tenant <id>` | Tenant identifier | Config default |
+
+Restored files are uploaded to the target user's primary drive. Folders are created as needed (existing folders with the same name are reused, not overwritten). Each file is decrypted, SHA-256 verified against the manifest checksum, and then uploaded using a small-file PUT (&le; 4 MiB) or a resumable upload session (> 4 MiB, with per-chunk retry on 429/503).
+
+Files larger than 4 MiB use a streaming decrypt pipeline: the encrypted blob is read from S3 as a stream, the first 28 bytes (12-byte IV + 16-byte auth tag) are consumed to initialize AES-256-GCM, and ciphertext is decrypted in chunks without buffering the full ciphertext in memory.
+
+**Conflict behavior** controls what happens when a file already exists at the target path. `rename` (default) appends a numeric suffix to avoid overwriting user edits made after a previous restore. `replace` overwrites the existing file. `fail` skips the file and logs an error.
 
 ### `atlas onedrive list-snapshots`
 
@@ -96,10 +114,20 @@ Mailbox backup currently keys `data/` and `manifests/` by the mailbox identifier
 
 | Flag | Description |
 | --- | --- |
+| `-o, --owner <id>` | User email or Entra object ID (required) |
 | `-s, --snapshot <id>` | Snapshot ID to verify (required) |
 | `-t, --tenant <id>` | Tenant identifier |
 
-`atlas onedrive verify` loads the manifest by snapshot ID, decrypts each referenced blob, recomputes SHA-256 with `timingSafeEqual`, and checks that the per-file index contains a row for that snapshot.
+`atlas onedrive verify` loads the manifest under `onedrive/manifests/{owner_id}/` for the resolved owner and snapshot ID (never listing other owners' prefixes), decrypts each referenced blob, recomputes SHA-256 with `timingSafeEqual`, and checks that the per-file index contains a row for that snapshot.
+
+## Snapshot Health Status
+
+Every backup prints a health status at the end:
+
+- **HEALTHY** -- all primary file content was backed up successfully. The snapshot and delta cursor are safe to rely on.
+- **UNHEALTHY** -- one or more critical errors occurred (file download failure, drive-level crash, encryption error). The affected drive's entries are excluded from the manifest and its delta cursor is not advanced. `process.exitCode` is set to `1` so CI/monitoring pipelines detect the failure.
+
+Non-critical issues such as historical version download failures or expired version URLs are reported as **warnings** in the output but do not affect the health status. Warnings appear as `[!]` lines above the status; errors appear indented under `UNHEALTHY`.
 
 ## Azure AD Permissions
 
@@ -107,7 +135,8 @@ Add these to your app registration (in addition to the Outlook backup set):
 
 | Permission | Type | Purpose |
 | --- | --- | --- |
-| `Files.Read.All` | Application | Read all users' OneDrive files |
+| `Files.Read.All` | Application | Read all users' OneDrive files (backup, verify) |
+| `Files.ReadWrite.All` | Application | Write to OneDrive (restore only) |
 | `User.Read.All` | Application | Resolve `users/{email}` to object ID for `-o` |
 
 Outlook backup already expects application permissions such as `Mail.Read` / `Mail.ReadBasic.All`; keep those for mailbox workflows.

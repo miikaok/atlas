@@ -1,18 +1,46 @@
 import {
-  scryptSync,
+  scrypt,
   randomBytes,
   createCipheriv,
   createDecipheriv,
   type CipherGCM,
+  type DecipherGCM,
 } from 'node:crypto';
+import { promisify } from 'node:util';
+
+/** Promisified `scrypt`; upstream typings omit `keylen` as a distinct argument. */
+const scrypt_async = promisify(scrypt) as (
+  password: string | Buffer | NodeJS.ArrayBufferView,
+  salt: string | Buffer | NodeJS.ArrayBufferView,
+  keylen: number,
+  options: { N: number; r: number; p: number; maxmem?: number },
+) => Promise<Buffer>;
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
-const SCRYPT_N = 16384;
-const SCRYPT_R = 8;
-const SCRYPT_P = 1;
+const SCRYPT_MAXMEM = 64 * 1024 * 1024;
+
+/** Versioned scrypt parameters used to derive the KEK. */
+export interface KekParams {
+  readonly version: number;
+  readonly N: number;
+  readonly r: number;
+  readonly p: number;
+}
+
+/** Current (latest) KEK derivation parameters. Bump version when changing. */
+export const CURRENT_KEK_PARAMS: KekParams = { version: 2, N: 32768, r: 8, p: 1 };
+
+/**
+ * Ordered history of all known KEK parameter sets, newest first.
+ * Used for fallback when no `_meta/kek_params.json` exists yet.
+ */
+export const KEK_PARAMS_HISTORY: readonly KekParams[] = [
+  CURRENT_KEK_PARAMS,
+  { version: 1, N: 16384, r: 8, p: 1 },
+];
 
 /**
  * Envelope encryption using AES-256-GCM.
@@ -24,10 +52,16 @@ const SCRYPT_P = 1;
  * Encrypted format: [12-byte IV] [16-byte auth tag] [ciphertext]
  */
 export class EnvelopeKeyService {
-  private readonly _kek: Buffer;
+  private constructor(private readonly _kek: Buffer) {}
 
-  constructor(passphrase: string, tenant_id: string) {
-    this._kek = derive_kek(passphrase, tenant_id);
+  /** Async factory — derives KEK using the given (or current) params. */
+  static async create(
+    passphrase: string,
+    tenant_id: string,
+    params: KekParams = CURRENT_KEK_PARAMS,
+  ): Promise<EnvelopeKeyService> {
+    const kek = await derive_kek(passphrase, tenant_id, params);
+    return new EnvelopeKeyService(kek);
   }
 
   /** Encrypts plaintext using the given DEK. */
@@ -50,6 +84,13 @@ export class EnvelopeKeyService {
     return { cipher, iv };
   }
 
+  /** Creates a streaming AES-256-GCM decipher initialized with IV and auth tag. */
+  create_decrypt_decipher(dek: Buffer, iv: Buffer, auth_tag: Buffer): DecipherGCM {
+    const decipher = createDecipheriv(ALGORITHM, dek, iv, { authTagLength: AUTH_TAG_LENGTH });
+    decipher.setAuthTag(auth_tag);
+    return decipher;
+  }
+
   /** Generates a fresh random 256-bit DEK. */
   generate_dek(): Buffer {
     return randomBytes(KEY_LENGTH);
@@ -66,15 +107,17 @@ export class EnvelopeKeyService {
   }
 }
 
-/**
- * Derives a 256-bit key encryption key from a passphrase and tenant_id salt
- * using scrypt (N=65536, r=8, p=1).
- */
-export function derive_kek(passphrase: string, tenant_id: string): Buffer {
-  return scryptSync(passphrase, tenant_id, KEY_LENGTH, {
-    N: SCRYPT_N,
-    r: SCRYPT_R,
-    p: SCRYPT_P,
+/** Derives a 256-bit KEK from passphrase + tenant_id using the given scrypt params. */
+export async function derive_kek(
+  passphrase: string,
+  tenant_id: string,
+  params: KekParams = CURRENT_KEK_PARAMS,
+): Promise<Buffer> {
+  return await scrypt_async(passphrase, tenant_id, KEY_LENGTH, {
+    N: params.N,
+    r: params.r,
+    p: params.p,
+    maxmem: SCRYPT_MAXMEM,
   });
 }
 

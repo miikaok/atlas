@@ -58,6 +58,8 @@ The config file and `.env` file contain sensitive credentials: Azure client secr
 chmod 600 .env atlas.config.json
 ```
 
+Atlas enforces this at runtime: on Unix systems, if a config file has group- or world-readable bits set (`mode & 0o077 !== 0`), a warning is logged recommending `chmod 600`. This is a warning rather than a hard error to avoid breaking existing deployments, but it should be addressed promptly.
+
 Never commit these files to version control. The included `.gitignore` already excludes `.env`, but verify that your config file is also excluded. In multi-user environments, ensure only the service account running Atlas can read these files.
 :::
 

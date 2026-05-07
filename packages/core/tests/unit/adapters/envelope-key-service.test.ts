@@ -6,33 +6,33 @@ describe('EnvelopeKeyService', () => {
   const tenant_id = 'tenant-abc';
 
   describe('derive_kek', () => {
-    it('produces a 32-byte key', () => {
-      const kek = derive_kek(passphrase, tenant_id);
+    it('produces a 32-byte key', async () => {
+      const kek = await derive_kek(passphrase, tenant_id);
       expect(kek.length).toBe(32);
     });
 
-    it('is deterministic for same inputs', () => {
-      const kek1 = derive_kek(passphrase, tenant_id);
-      const kek2 = derive_kek(passphrase, tenant_id);
+    it('is deterministic for same inputs', async () => {
+      const kek1 = await derive_kek(passphrase, tenant_id);
+      const kek2 = await derive_kek(passphrase, tenant_id);
       expect(kek1.equals(kek2)).toBe(true);
     });
 
-    it('differs across tenants', () => {
-      const kek_a = derive_kek(passphrase, 'tenant-a');
-      const kek_b = derive_kek(passphrase, 'tenant-b');
+    it('differs across tenants', async () => {
+      const kek_a = await derive_kek(passphrase, 'tenant-a');
+      const kek_b = await derive_kek(passphrase, 'tenant-b');
       expect(kek_a.equals(kek_b)).toBe(false);
     });
 
-    it('differs across passphrases', () => {
-      const kek1 = derive_kek('pass-1', tenant_id);
-      const kek2 = derive_kek('pass-2', tenant_id);
+    it('differs across passphrases', async () => {
+      const kek1 = await derive_kek('pass-1', tenant_id);
+      const kek2 = await derive_kek('pass-2', tenant_id);
       expect(kek1.equals(kek2)).toBe(false);
     });
   });
 
   describe('encrypt / decrypt round-trip', () => {
-    it('round-trips arbitrary data', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('round-trips arbitrary data', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       const dek = svc.generate_dek();
       const plaintext = Buffer.from('hello world, this is a test message');
 
@@ -41,8 +41,8 @@ describe('EnvelopeKeyService', () => {
       expect(decrypted.equals(plaintext)).toBe(true);
     });
 
-    it('produces different ciphertext each time (random IV)', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('produces different ciphertext each time (random IV)', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       const dek = svc.generate_dek();
       const plaintext = Buffer.from('same data');
 
@@ -51,8 +51,8 @@ describe('EnvelopeKeyService', () => {
       expect(ct1.equals(ct2)).toBe(false);
     });
 
-    it('ciphertext is longer than plaintext (IV + auth tag)', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('ciphertext is longer than plaintext (IV + auth tag)', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       const dek = svc.generate_dek();
       const plaintext = Buffer.from('test');
 
@@ -60,8 +60,8 @@ describe('EnvelopeKeyService', () => {
       expect(ciphertext.length).toBe(plaintext.length + 12 + 16);
     });
 
-    it('rejects tampered ciphertext', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('rejects tampered ciphertext', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       const dek = svc.generate_dek();
       const ciphertext = svc.encrypt(Buffer.from('data'), dek);
 
@@ -69,8 +69,8 @@ describe('EnvelopeKeyService', () => {
       expect(() => svc.decrypt(ciphertext, dek)).toThrow();
     });
 
-    it('rejects truncated ciphertext', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('rejects truncated ciphertext', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       const dek = svc.generate_dek();
       const short = Buffer.alloc(10);
 
@@ -79,8 +79,8 @@ describe('EnvelopeKeyService', () => {
   });
 
   describe('wrap / unwrap DEK', () => {
-    it('round-trips a DEK through wrap and unwrap', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('round-trips a DEK through wrap and unwrap', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       const dek = svc.generate_dek();
 
       const wrapped = svc.wrap_dek(dek);
@@ -88,17 +88,17 @@ describe('EnvelopeKeyService', () => {
       expect(unwrapped.equals(dek)).toBe(true);
     });
 
-    it('wrapped DEK does not contain the plaintext DEK', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('wrapped DEK does not contain the plaintext DEK', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       const dek = svc.generate_dek();
       const wrapped = svc.wrap_dek(dek);
 
       expect(wrapped.includes(dek)).toBe(false);
     });
 
-    it('cannot unwrap with wrong tenant passphrase', () => {
-      const svc_a = new EnvelopeKeyService(passphrase, 'tenant-a');
-      const svc_b = new EnvelopeKeyService(passphrase, 'tenant-b');
+    it('cannot unwrap with wrong tenant passphrase', async () => {
+      const svc_a = await EnvelopeKeyService.create(passphrase, 'tenant-a');
+      const svc_b = await EnvelopeKeyService.create(passphrase, 'tenant-b');
       const dek = svc_a.generate_dek();
 
       const wrapped = svc_a.wrap_dek(dek);
@@ -107,13 +107,13 @@ describe('EnvelopeKeyService', () => {
   });
 
   describe('generate_dek', () => {
-    it('produces a 32-byte key', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('produces a 32-byte key', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       expect(svc.generate_dek().length).toBe(32);
     });
 
-    it('produces unique keys', () => {
-      const svc = new EnvelopeKeyService(passphrase, tenant_id);
+    it('produces unique keys', async () => {
+      const svc = await EnvelopeKeyService.create(passphrase, tenant_id);
       const k1 = svc.generate_dek();
       const k2 = svc.generate_dek();
       expect(k1.equals(k2)).toBe(false);

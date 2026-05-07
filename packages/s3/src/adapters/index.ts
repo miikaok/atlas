@@ -11,6 +11,7 @@ export {
   ObjectLockVersioningDisabledError,
   ObjectLockUnsupportedError,
   ObjectLockModeRejectedError,
+  PreconditionFailedError,
 } from './object-lock.errors';
 export { validate_dek_match, DekMismatchError } from './dek-validator';
 export { DefaultTenantContextFactory } from './tenant-context.factory';

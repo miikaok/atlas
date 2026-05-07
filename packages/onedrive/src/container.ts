@@ -8,6 +8,7 @@ import {
   ONEDRIVE_CATALOG_USE_CASE_TOKEN,
   ONEDRIVE_VERIFICATION_USE_CASE_TOKEN,
   ONEDRIVE_RESTORE_USE_CASE_TOKEN,
+  TENANT_CONTEXT_FACTORY_TOKEN,
 } from '@atlas/types';
 import { GraphOneDriveConnector } from '@/adapters/graph-onedrive-connector.adapter';
 import { S3OneDriveManifestRepository } from '@/adapters/s3-onedrive-manifest-repository.adapter';
@@ -18,8 +19,14 @@ import { OneDriveRestoreService } from '@/services/onedrive-restore.service';
 import { OneDriveCatalogService } from '@/services/onedrive-catalog.service';
 import { OneDriveVerificationService } from '@/services/onedrive-verification.service';
 
-/** Registers OneDrive-specific DI bindings. */
+/** Registers OneDrive-specific DI bindings. Requires TENANT_CONTEXT_FACTORY_TOKEN to be bound first. */
 export function bind_onedrive(container: Container): void {
+  if (!container.isBound(TENANT_CONTEXT_FACTORY_TOKEN)) {
+    throw new Error(
+      'TENANT_CONTEXT_FACTORY_TOKEN must be bound before calling bind_onedrive. ' +
+        'Call bind_s3_storage() first.',
+    );
+  }
   container.bind(ONEDRIVE_CONNECTOR_TOKEN).to(GraphOneDriveConnector).inSingletonScope();
   container
     .bind(ONEDRIVE_MANIFEST_REPOSITORY_TOKEN)

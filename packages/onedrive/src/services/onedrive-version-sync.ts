@@ -76,11 +76,7 @@ export async function sync_file_versions(
     const exists = await ctx.storage.exists(storage_key);
 
     if (!exists) {
-      await ctx.storage.put(storage_key, ctx.encrypt(outcome.content), {
-        'x-onedrive-file-id': item.item_id,
-        'x-onedrive-version-id': version.version_id,
-        'x-plaintext-sha256': checksum,
-      });
+      await ctx.storage.put(storage_key, ctx.encrypt(outcome.content));
       new_versions_stored++;
     } else {
       versions_deduplicated++;

@@ -31,10 +31,11 @@ export class OneDriveVerificationService implements OneDriveVerificationUseCase 
   /** Loads the manifest and checks content blobs plus per-file index rows for the snapshot. */
   async verify_onedrive_snapshot(
     tenant_id: string,
+    owner_id: string,
     snapshot_id: string,
   ): Promise<OneDriveVerificationResult> {
     const ctx = await this._tenant_factory.create(tenant_id);
-    const manifest = await this._manifests.find_by_snapshot(ctx, snapshot_id);
+    const manifest = await this._manifests.find_by_snapshot(ctx, owner_id, snapshot_id);
     if (!manifest) {
       throw new Error(`No OneDrive manifest found for snapshot ${snapshot_id}`);
     }

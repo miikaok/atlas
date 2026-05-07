@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { inject, injectable } from 'inversify';
 import type {
   OneDriveBackupOptions,
@@ -7,11 +7,9 @@ import type {
   OneDriveConnector,
   OneDriveDeltaCursor,
   OneDriveDeltaCursorRepository,
-  OneDriveDeltaItem,
   OneDriveFileVersionIndexRepository,
   OneDriveManifestEntry,
   OneDriveManifestRepository,
-  TenantContext,
   TenantContextFactory,
 } from '@atlas/types';
 import {
@@ -29,17 +27,13 @@ import {
   build_snapshot_manifest,
   build_stored_entry,
 } from '@/services/onedrive-backup-builders';
-import { classify_change_type } from '@/services/onedrive-change-classifier';
-import { download_with_retry } from '@/services/onedrive-download-orchestrator';
 import {
-  cleanup_stale_staging,
-  LARGE_FILE_THRESHOLD,
-  process_large_file,
-} from '@/services/onedrive-large-file-pipeline';
-import { onedrive_data_key } from '@/services/onedrive-storage-keys';
+  ensure_drives_discovered,
+  process_backup_file,
+} from '@/services/onedrive-backup-file-processor';
+import { classify_change_type } from '@/services/onedrive-change-classifier';
+import { cleanup_stale_staging } from '@/services/onedrive-large-file-pipeline';
 import { sync_file_versions } from '@/services/onedrive-version-sync';
-
-const HASH_CHUNK_SIZE = 64 * 1024 * 1024;
 
 @injectable()
 export class OneDriveBackupService implements OneDriveBackupUseCase {
@@ -78,6 +72,9 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
     const previous_etag_by_file_id: Record<string, string> = {
       ...(previous_cursor?.previous_etag_by_file_id ?? {}),
     };
+    const previous_kind_by_file_id: Record<string, 'file' | 'folder'> = {
+      ...(previous_cursor?.previous_kind_by_file_id ?? {}),
+    };
 
     await cleanup_stale_staging(ctx, owner_id);
 
@@ -92,69 +89,128 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
     let total_versions_unavailable = 0;
     let total_versions_failed = 0;
     const errors: string[] = [];
+    const warnings: string[] = [];
+
+    const failed_drive_ids = new Set<string>();
 
     for (const drive of drives) {
-      const prev_delta = options.force_full
-        ? undefined
-        : previous_cursor?.delta_link_by_drive[drive.drive_id];
-      const delta = await this._connector.fetch_delta(
-        tenant_id,
-        owner_id,
-        drive.drive_id,
-        prev_delta,
-      );
-      delta_link_by_drive[drive.drive_id] = delta.delta_link;
-
-      for (const item of delta.items) {
-        if (item.kind !== 'file') continue;
-        const change_type = classify_change_type(
-          item,
-          previous_path_by_file_id,
-          previous_name_by_file_id,
-          previous_etag_by_file_id,
-        );
-        if (!change_type) continue;
-
-        if (item.deleted) {
-          deleted_items++;
-          entries.push(build_deleted_entry(item, change_type));
-          delete previous_path_by_file_id[item.item_id];
-          delete previous_name_by_file_id[item.item_id];
-          delete previous_etag_by_file_id[item.item_id];
-          continue;
-        }
-
-        const result = await this.process_file(item, owner_id, ctx);
-        if (!result) {
-          errors.push(`Failed to process file ${item.file_name} (${item.item_id})`);
-          continue;
-        }
-
-        if (result.deduplicated) files_deduplicated++;
-        if (result.stored) files_stored++;
-
-        const version_result = await sync_file_versions(
-          this._connector,
-          item,
+      try {
+        const prev_delta = options.force_full
+          ? undefined
+          : previous_cursor?.delta_link_by_drive[drive.drive_id];
+        const delta = await this._connector.fetch_delta(
+          tenant_id,
           owner_id,
-          snapshot_id,
-          ctx,
-          this._file_indexes,
-        );
-        accumulate_version_stats(
-          version_result,
-          { total_versions_stored, total_versions_unavailable, total_versions_failed },
-          (s, u, f) => {
-            total_versions_stored = s;
-            total_versions_unavailable = u;
-            total_versions_failed = f;
-          },
+          drive.drive_id,
+          prev_delta,
         );
 
-        entries.push(build_stored_entry(item, result.storage_key, result.checksum, change_type));
-        previous_path_by_file_id[item.item_id] = item.parent_path;
-        previous_name_by_file_id[item.item_id] = item.file_name;
-        if (item.etag) previous_etag_by_file_id[item.item_id] = item.etag;
+        if (delta.reset_detected) {
+          for (const [fid, kind] of Object.entries(previous_kind_by_file_id)) {
+            if (kind === 'file') {
+              delete previous_path_by_file_id[fid];
+              delete previous_name_by_file_id[fid];
+              delete previous_etag_by_file_id[fid];
+            }
+          }
+        }
+
+        let drive_has_errors = false;
+        const drive_entries: OneDriveManifestEntry[] = [];
+        let drive_files_stored = 0;
+        let drive_files_deduplicated = 0;
+        let drive_deleted_items = 0;
+
+        for (const item of delta.items) {
+          const effective_kind =
+            item.deleted && item.kind === 'file' && previous_kind_by_file_id[item.item_id]
+              ? previous_kind_by_file_id[item.item_id]
+              : item.kind;
+          if (effective_kind !== 'file') {
+            if (!item.deleted) previous_kind_by_file_id[item.item_id] = item.kind;
+            continue;
+          }
+
+          const change_type = classify_change_type(
+            item,
+            previous_path_by_file_id,
+            previous_name_by_file_id,
+            previous_etag_by_file_id,
+          );
+          if (!change_type) continue;
+
+          if (item.deleted) {
+            drive_deleted_items++;
+            drive_entries.push(build_deleted_entry(item, change_type));
+            continue;
+          }
+
+          const result = await process_backup_file(this._connector, item, owner_id, ctx);
+          if (!result) {
+            drive_has_errors = true;
+            errors.push(`Failed to process file ${item.file_name} (${item.item_id})`);
+            continue;
+          }
+
+          if (result.deduplicated) drive_files_deduplicated++;
+          if (result.stored) drive_files_stored++;
+
+          if (!result.deduplicated) {
+            const version_result = await sync_file_versions(
+              this._connector,
+              item,
+              owner_id,
+              snapshot_id,
+              ctx,
+              this._file_indexes,
+            );
+            accumulate_version_stats(
+              version_result,
+              { total_versions_stored, total_versions_unavailable, total_versions_failed },
+              (s, u, f) => {
+                total_versions_stored = s;
+                total_versions_unavailable = u;
+                total_versions_failed = f;
+              },
+            );
+          }
+
+          drive_entries.push(
+            build_stored_entry(item, result.storage_key, result.checksum, change_type),
+          );
+          previous_path_by_file_id[item.item_id] = item.parent_path;
+          previous_name_by_file_id[item.item_id] = item.file_name;
+          previous_kind_by_file_id[item.item_id] = 'file';
+          if (item.etag) previous_etag_by_file_id[item.item_id] = item.etag;
+        }
+
+        if (!drive_has_errors) {
+          entries.push(...drive_entries);
+          files_stored += drive_files_stored;
+          files_deduplicated += drive_files_deduplicated;
+          deleted_items += drive_deleted_items;
+          delta_link_by_drive[drive.drive_id] = delta.delta_link;
+
+          await this._cursors.save(ctx, {
+            owner_id,
+            delta_link_by_drive,
+            previous_path_by_file_id,
+            previous_name_by_file_id,
+            previous_etag_by_file_id,
+            previous_kind_by_file_id,
+            updated_at: new Date().toISOString(),
+          });
+        } else {
+          failed_drive_ids.add(drive.drive_id);
+          logger.warn(
+            `Drive ${drive.drive_id}: discarding ${drive_entries.length} entries due to errors`,
+          );
+        }
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        logger.error(`Drive ${drive.drive_id} failed: ${reason}`);
+        errors.push(`Drive ${drive.drive_name} (${drive.drive_id}): ${reason}`);
+        failed_drive_ids.add(drive.drive_id);
       }
     }
 
@@ -164,11 +220,12 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
       previous_path_by_file_id,
       previous_name_by_file_id,
       previous_etag_by_file_id,
+      previous_kind_by_file_id,
       updated_at: new Date().toISOString(),
     };
 
     if (total_versions_failed > 0) {
-      errors.push(`${total_versions_failed} version download(s) failed unexpectedly`);
+      warnings.push(`${total_versions_failed} version download(s) failed unexpectedly`);
     }
     const healthy = errors.length === 0;
 
@@ -183,6 +240,7 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
         total_versions_stored,
         total_versions_unavailable,
         errors,
+        warnings,
         healthy,
       );
     }
@@ -233,62 +291,9 @@ export class OneDriveBackupService implements OneDriveBackupUseCase {
         versions_stored: total_versions_stored,
         versions_unavailable: total_versions_unavailable,
         errors,
+        warnings,
         healthy,
       },
     };
   }
-
-  /** Downloads or reuses storage for a non-deleted delta file. */
-  private async process_file(
-    item: OneDriveDeltaItem,
-    owner_id: string,
-    ctx: TenantContext,
-  ): Promise<
-    { storage_key: string; checksum: string; stored: boolean; deduplicated: boolean } | undefined
-  > {
-    if (item.size_bytes >= LARGE_FILE_THRESHOLD) {
-      try {
-        return await process_large_file(this._connector, item, owner_id, ctx);
-      } catch (err) {
-        logger.warn(
-          `Skipping large file ${item.item_id} (${item.file_name}): ${err instanceof Error ? err.message : String(err)}`,
-        );
-        return undefined;
-      }
-    }
-
-    const raw_body = await download_with_retry(this._connector, item);
-    if (!raw_body) return undefined;
-
-    const checksum = compute_sha256_chunked(raw_body);
-    const storage_key = onedrive_data_key(owner_id, checksum);
-    const exists = await ctx.storage.exists(storage_key);
-
-    if (!exists) {
-      await ctx.storage.put(storage_key, ctx.encrypt(raw_body), {
-        'x-onedrive-file-id': item.item_id,
-        'x-plaintext-sha256': checksum,
-      });
-      return { storage_key, checksum, stored: true, deduplicated: false };
-    }
-
-    return { storage_key, checksum, stored: false, deduplicated: true };
-  }
-}
-
-/** @throws Error when no drives are returned (likely missing Graph permissions). */
-function ensure_drives_discovered(drive_count: number): void {
-  if (drive_count > 0) return;
-  throw new Error(
-    'Missing Microsoft Graph application permissions for OneDrive: Files.Read.All, Sites.Read.All.',
-  );
-}
-
-/** Computes SHA-256 in chunks to avoid ERR_OUT_OF_RANGE on buffers > 2 GB. */
-function compute_sha256_chunked(data: Buffer): string {
-  const hash = createHash('sha256');
-  for (let offset = 0; offset < data.length; offset += HASH_CHUNK_SIZE) {
-    hash.update(data.subarray(offset, Math.min(offset + HASH_CHUNK_SIZE, data.length)));
-  }
-  return hash.digest('hex');
 }

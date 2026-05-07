@@ -24,3 +24,11 @@ export class ObjectLockModeRejectedError extends Error {
     this.name = 'ObjectLockModeRejectedError';
   }
 }
+
+/** Thrown when a conditional put fails because the ETag no longer matches. */
+export class PreconditionFailedError extends Error {
+  constructor(key: string) {
+    super(`Conditional write failed for key ${key} — ETag mismatch (412 Precondition Failed)`);
+    this.name = 'PreconditionFailedError';
+  }
+}

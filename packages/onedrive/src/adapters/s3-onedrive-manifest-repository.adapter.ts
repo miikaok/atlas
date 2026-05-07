@@ -4,11 +4,14 @@ import type {
   OneDriveManifestRepository,
   TenantContext,
 } from '@atlas/types';
-import {
-  onedrive_manifest_key,
-  onedrive_manifest_prefix,
-  onedrive_manifest_root_prefix,
-} from '@/services/onedrive-storage-keys';
+import { onedrive_manifest_key, onedrive_manifest_prefix } from '@/services/onedrive-storage-keys';
+
+class InvalidOneDriveManifestDateError extends Error {
+  constructor(readonly storage_key: string) {
+    super(`Invalid created_at in OneDrive manifest at ${storage_key}`);
+    this.name = 'InvalidOneDriveManifestDateError';
+  }
+}
 
 /** Persists OneDrive snapshot manifests as encrypted JSON in S3. */
 @injectable()
@@ -20,14 +23,15 @@ export class S3OneDriveManifestRepository implements OneDriveManifestRepository 
     await ctx.storage.put(key, ctx.encrypt(payload));
   }
 
-  /** Searches all owner prefixes for a manifest by snapshot ID. */
+  /** Loads a manifest by listing only that owner's manifest prefix. */
   async find_by_snapshot(
     ctx: TenantContext,
+    owner_id: string,
     snapshot_id: string,
   ): Promise<OneDriveSnapshotManifest | undefined> {
-    const keys = await ctx.storage.list(onedrive_manifest_root_prefix());
-    const target_suffix = `/${snapshot_id}.json`;
-    const key = keys.find((candidate) => candidate.endsWith(target_suffix));
+    const expected_key = onedrive_manifest_key(owner_id, snapshot_id);
+    const keys = await ctx.storage.list(onedrive_manifest_prefix(owner_id));
+    const key = keys.find((candidate) => candidate === expected_key);
     if (!key) return undefined;
     return this.download_manifest(ctx, key);
   }
@@ -55,7 +59,7 @@ export class S3OneDriveManifestRepository implements OneDriveManifestRepository 
     return manifests.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
   }
 
-  /** Decrypts and parses a manifest object from storage, or undefined on failure. */
+  /** Decrypts and parses a manifest object from storage, or undefined on recoverable failure. */
   private async download_manifest(
     ctx: TenantContext,
     key: string,
@@ -64,8 +68,13 @@ export class S3OneDriveManifestRepository implements OneDriveManifestRepository 
       const payload = await ctx.storage.get(key);
       const json = ctx.decrypt(payload).toString('utf-8');
       const parsed = JSON.parse(json) as OneDriveSnapshotManifest;
-      return { ...parsed, created_at: new Date(parsed.created_at) };
-    } catch {
+      const created_at = new Date(parsed.created_at);
+      if (Number.isNaN(created_at.getTime())) {
+        throw new InvalidOneDriveManifestDateError(key);
+      }
+      return { ...parsed, created_at };
+    } catch (err) {
+      if (err instanceof InvalidOneDriveManifestDateError) throw err;
       return undefined;
     }
   }

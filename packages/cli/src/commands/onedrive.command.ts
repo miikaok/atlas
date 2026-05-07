@@ -5,12 +5,14 @@ import { ATLAS_CONFIG_TOKEN, logger } from '@atlas/core';
 import type {
   OneDriveBackupUseCase,
   OneDriveCatalogUseCase,
+  OneDriveRestoreUseCase,
   OneDriveVerificationUseCase,
   UserIdentityResolver,
 } from '@atlas/types';
 import {
   ONEDRIVE_BACKUP_USE_CASE_TOKEN,
   ONEDRIVE_CATALOG_USE_CASE_TOKEN,
+  ONEDRIVE_RESTORE_USE_CASE_TOKEN,
   ONEDRIVE_VERIFICATION_USE_CASE_TOKEN,
   USER_IDENTITY_RESOLVER_TOKEN,
 } from '@atlas/types';
@@ -35,7 +37,16 @@ interface OneDriveListVersionsOptions extends OneDriveTenantOptions {
   file: string;
 }
 
+interface OneDriveRestoreCommandOptions extends OneDriveTenantOptions {
+  owner: string;
+  snapshot: string;
+  targetOwner?: string;
+  fileFilter?: string[];
+  conflict?: 'replace' | 'rename' | 'fail';
+}
+
 interface OneDriveVerifyOptions extends OneDriveTenantOptions {
+  owner: string;
   snapshot: string;
 }
 
@@ -45,6 +56,7 @@ export function register_onedrive_command(program: Command, get_container: Conta
     .command('onedrive')
     .description('OneDrive backup and verification commands');
   register_onedrive_backup(group, get_container);
+  register_onedrive_restore(group, get_container);
   register_onedrive_list_snapshots(group, get_container);
   register_onedrive_list_versions(group, get_container);
   register_onedrive_verify(group, get_container);
@@ -58,6 +70,24 @@ function register_onedrive_backup(group: Command, get_container: ContainerFactor
     .option('--full', 'force full crawl ignoring saved delta state')
     .option('-t, --tenant <id>', 'tenant identifier (defaults to config)')
     .action((options: OneDriveBackupOptions) => execute_onedrive_backup(get_container(), options));
+}
+
+function register_onedrive_restore(group: Command, get_container: ContainerFactory): void {
+  group
+    .command('restore')
+    .description('Restore files from a OneDrive snapshot')
+    .requiredOption('-o, --owner <id>', 'user email or Entra object ID')
+    .requiredOption('-s, --snapshot <id>', 'snapshot identifier')
+    .option('--target-owner <id>', 'target user email or Entra object ID (defaults to owner)')
+    .option('--file-filter <paths...>', 'only restore specific files (by ID or path)')
+    .option(
+      '-c, --conflict <mode>',
+      'file conflict policy: replace, rename, or fail (default: rename)',
+    )
+    .option('-t, --tenant <id>', 'tenant identifier (defaults to config)')
+    .action((options: OneDriveRestoreCommandOptions) =>
+      execute_onedrive_restore(get_container(), options),
+    );
 }
 
 function register_onedrive_list_snapshots(group: Command, get_container: ContainerFactory): void {
@@ -87,6 +117,7 @@ function register_onedrive_verify(group: Command, get_container: ContainerFactor
   group
     .command('verify')
     .description('Verify integrity of a OneDrive snapshot')
+    .requiredOption('-o, --owner <id>', 'user email or Entra object ID')
     .requiredOption('-s, --snapshot <id>', 'snapshot identifier')
     .option('-t, --tenant <id>', 'tenant identifier (defaults to config)')
     .action((options: OneDriveVerifyOptions) => execute_onedrive_verify(get_container(), options));
@@ -155,6 +186,12 @@ async function execute_onedrive_backup(
     );
   }
 
+  if (result.summary.warnings.length > 0) {
+    for (const w of result.summary.warnings) {
+      logger.warn(`  ${w}`);
+    }
+  }
+
   if (result.summary.healthy) {
     logger.success('  Status: HEALTHY');
   } else {
@@ -163,6 +200,40 @@ async function execute_onedrive_backup(
       logger.error(`    - ${err}`);
     }
     process.exitCode = 1;
+  }
+}
+
+async function execute_onedrive_restore(
+  container: Container,
+  options: OneDriveRestoreCommandOptions,
+): Promise<void> {
+  const tenant_id = resolve_tenant_id(container, options);
+  const owner = await resolve_owner(container, tenant_id, options.owner);
+  const target_owner = options.targetOwner
+    ? await resolve_owner(container, tenant_id, options.targetOwner)
+    : undefined;
+  const restore = container.get<OneDriveRestoreUseCase>(ONEDRIVE_RESTORE_USE_CASE_TOKEN);
+  const result = await restore.restore_onedrive(tenant_id, owner.object_id, {
+    snapshot_id: options.snapshot,
+    ...(target_owner ? { target_owner_id: target_owner.object_id } : {}),
+    ...(options.fileFilter ? { file_filter: options.fileFilter } : {}),
+    ...(options.conflict ? { conflict_behavior: options.conflict } : {}),
+  });
+
+  logger.banner('Atlas OneDrive Restore');
+  logger.info(`Snapshot: ${result.snapshot_id}`);
+  logger.info(`Files restored: ${result.files_restored}`);
+  logger.info(`Folders created: ${result.folders_created}`);
+  if (result.files_skipped > 0) {
+    logger.warn(`Files skipped: ${result.files_skipped}`);
+  }
+  if (result.errors.length > 0) {
+    for (const err of result.errors) {
+      logger.error(`  - ${err}`);
+    }
+    process.exitCode = 1;
+  } else {
+    logger.success('Restore completed successfully');
   }
 }
 
@@ -215,8 +286,13 @@ async function execute_onedrive_verify(
   options: OneDriveVerifyOptions,
 ): Promise<void> {
   const tenant_id = resolve_tenant_id(container, options);
+  const owner = await resolve_owner(container, tenant_id, options.owner);
   const verifier = container.get<OneDriveVerificationUseCase>(ONEDRIVE_VERIFICATION_USE_CASE_TOKEN);
-  const result = await verifier.verify_onedrive_snapshot(tenant_id, options.snapshot);
+  const result = await verifier.verify_onedrive_snapshot(
+    tenant_id,
+    owner.object_id,
+    options.snapshot,
+  );
 
   logger.banner('Atlas OneDrive Verify');
   if (result.failed_file_ids.length === 0 && result.index_issues.length === 0) {

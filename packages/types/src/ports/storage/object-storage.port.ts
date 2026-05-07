@@ -35,6 +35,11 @@ export interface MultipartUploadHandle {
   abort(): Promise<void>;
 }
 
+export interface ObjectStorageEtagResult {
+  readonly data: Buffer;
+  readonly etag: string;
+}
+
 export interface ObjectStorage {
   /** Writes an object to storage under the given key. */
   put(
@@ -42,10 +47,17 @@ export interface ObjectStorage {
     data: Buffer,
     metadata?: Record<string, string>,
     object_lock_policy?: StorageObjectLockPolicy,
+    if_match?: string,
   ): Promise<void>;
 
   /** Reads the full content of an object from storage. */
   get(key: string): Promise<Buffer>;
+
+  /** Reads an object along with its ETag for conditional writes. */
+  get_with_etag(key: string): Promise<ObjectStorageEtagResult>;
+
+  /** Returns a readable stream for an object (avoids buffering the full body). */
+  get_stream(key: string): Promise<NodeJS.ReadableStream>;
 
   /** Removes an object from storage. */
   delete(key: string): Promise<void>;

@@ -1,21 +1,43 @@
+import type { Readable } from 'node:stream';
+
 import { compute_chunk_timeout_ms } from '@/adapters/graph-onedrive-chunked-download';
 
-/** Drains a readable stream into a buffer with a wall-clock timeout. */
+/**
+ * Drains a readable stream into a buffer with a wall-clock timeout.
+ * On timeout, destroys the stream so backing resources are released.
+ */
 export async function stream_to_buffer(
   stream: NodeJS.ReadableStream,
   timeout_ms: number,
 ): Promise<Buffer> {
+  const readable = stream as Readable;
   const chunks: Buffer[] = [];
   const read_stream = async (): Promise<void> => {
-    for await (const chunk of stream) {
+    for await (const chunk of readable) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
   };
-  await with_timeout(read_stream(), timeout_ms, 'Graph content stream timed out');
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      read_stream(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          readable.destroy();
+          reject(new Error('Graph content stream timed out'));
+        }, timeout_ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   return Buffer.concat(chunks);
 }
 
-/** @throws Error if promise does not settle before timeout_ms. */
+/**
+ * Settles when `promise` fulfills or rejects before `timeout_ms`, otherwise rejects with `message`.
+ * @throws Error if promise does not settle before timeout_ms.
+ */
 export async function with_timeout<T>(
   promise: Promise<T>,
   timeout_ms: number,

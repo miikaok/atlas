@@ -5,9 +5,10 @@ export interface OneDriveManifestRepository {
   /** Persists a snapshot manifest. */
   save(ctx: TenantContext, manifest: OneDriveSnapshotManifest): Promise<void>;
 
-  /** Finds a specific manifest by snapshot ID. */
+  /** Finds a manifest for an owner by snapshot ID under that owner's prefix. */
   find_by_snapshot(
     ctx: TenantContext,
+    owner_id: string,
     snapshot_id: string,
   ): Promise<OneDriveSnapshotManifest | undefined>;
 
